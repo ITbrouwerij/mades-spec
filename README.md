@@ -1,5 +1,7 @@
 # MAdES — Markdown Advanced Electronic Signatures
 
+[![Tests](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml/badge.svg)](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml)
+
 > **Status:** Draft proposal · **Version:** 0.3 · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
 >
 > **Seeking peer review.** This is an early-stage proposal — not an accepted standard. Specific technical feedback (canonicalisation edge cases, algorithm choices, key-distribution model) is more valuable than a general "is this useful?" discussion.
