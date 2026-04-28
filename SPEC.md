@@ -125,7 +125,7 @@ yaml
 ~~~mades-sig-fields
 stages:
   - id: drafting
-    mode: serial          # binnen deze stage: één na één tekenen
+    mode: serial          # within this stage: signers complete one at a time
     fields:
       - id: author
         role: Author
@@ -135,8 +135,8 @@ stages:
         required: true
 
   - id: review
-    mode: parallel        # binnen deze stage: willekeurige volgorde
-    depends_on: drafting  # opent pas als drafting compleet
+    mode: parallel        # within this stage: any order
+    depends_on: drafting  # only opens once drafting is complete
     fields:
       - id: legal-review
         role: Legal
