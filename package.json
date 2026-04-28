@@ -1,0 +1,37 @@
+{
+  "name": "@itbrouwerij/mades-spec",
+  "version": "0.3.0",
+  "description": "MAdES — Markdown Advanced Electronic Signatures: spec + reference implementation",
+  "type": "module",
+  "bin": {
+    "mades-sign": "./reference/mades-sign.mjs",
+    "mades-verify": "./reference/mades-verify.mjs"
+  },
+  "scripts": {
+    "test": "node --test reference/test/"
+  },
+  "keywords": [
+    "markdown",
+    "signature",
+    "cryptography",
+    "hmac",
+    "ed25519",
+    "ades",
+    "eidas",
+    "mades",
+    "document-signing"
+  ],
+  "author": "Jan Smets - ITbrouwerij <jan.smets@itbrouwerij.be>",
+  "license": "MIT",
+  "homepage": "https://github.com/ITbrouwerij/mades-spec",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ITbrouwerij/mades-spec.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ITbrouwerij/mades-spec/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
