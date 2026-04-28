@@ -13,7 +13,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18, 20, 22]
+        # Latest LTS versions only — Node 24 is current LTS (April 2026),
+        # 22 is previous LTS, 20 is in maintenance. Node 18 is EOL.
+        node-version: [20, 22, 24]
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:

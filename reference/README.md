@@ -1,6 +1,6 @@
 # MAdES reference implementation (Node.js)
 
-Reference scripts that demonstrate a working MAdES sign + verify cycle. Zero dependencies (Node.js built-ins only). Targets Node 18+.
+Reference scripts that demonstrate a working MAdES sign + verify cycle. Zero dependencies (Node.js built-ins only). Targets Node 20+ (current LTS line).
 
 ## Status
 
