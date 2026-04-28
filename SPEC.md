@@ -58,7 +58,7 @@ preserve them when re-encoding but MUST NOT rely on them for signature
 validity. Example:
 
 yaml
-x-vecto-tenant-id: 00000000-0000-0000-0000-000000000001
+x-vecto-tenant-id: 019dd48d-beab-73fe-8c2c-ce931b2489d6
 x-vecto-doc-ref: REL-5
 
 
