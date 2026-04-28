@@ -26,4 +26,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Run tests
-        run: node --test reference/test/
+        # Explicit file path (not directory) — Node's --test directory-mode
+        # behaviour varies between versions and platforms; explicit files
+        # work consistently on Node 18/20/22 across Linux/macOS/Windows.
+        run: node --test reference/test/canonicalisation.test.mjs
