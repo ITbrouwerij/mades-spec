@@ -7,7 +7,7 @@ built-ins only. Node 20+.
 mades-canon.mjs    block location, parsing, canonicalisation, signing input
 mades-verify.mjs   verify a document using nothing but the document
 mades-sign.mjs     append a signature, signing with a local key
-test/              19 tests, including one against a real signed document
+test/              26 tests, including one against a real signed document
 ```
 
 ## Verify
@@ -66,17 +66,22 @@ verifier is allowed to claim.
 contents are not parsed. Verifying RFC 3161 properly is a library, and pretending
 otherwise would be the same mistake as the false green above.
 
-## Known limitation
+## A document about MAdES can be signed with MAdES
 
-Block location is a byte scan for the opening marker, so **a document that
-quotes it — a tutorial, an issue, this specification — produces a phantom
-block**. The verifier reports *"may be prose describing one"* rather than
-claiming the document is modified, but the underlying gap is real: a
-specification cannot presently be signed with the thing it specifies.
+Since spec v1.4, block location obeys two rules (§a.1): the opening marker counts
+only **at the start of a line**, and never **inside a fenced code block**. Before
+them, block location was a raw byte scan that could not tell a signature from a
+sentence describing one, so every tutorial, issue and draft of the specification
+produced a phantom block — and this verifier reported over a sound document that
+it could not be checked.
 
-The proposed fix is in SPEC.md under open decisions: recognise the marker only
-at the start of a line, and skip fenced code regions. There is a test pinning
-today's behaviour, and it flips when the fix lands.
+Both rules are byte-level; neither needs a Markdown parser. A verifier that has
+to *understand* a document to find its signature is one that disagrees with the
+next verifier about where the signature was.
+
+`../examples/05-a-real-signed-document.md` still describes the limitation in its
+prose. It was signed before the fix, and rewriting a signed document to make it
+say something more flattering is the exact thing this format exists to prevent.
 
 ## Tests
 
@@ -84,7 +89,7 @@ today's behaviour, and it flips when the fix lands.
 npm test
 ```
 
-19 tests. The first suite verifies the real signed document, checks that a single
+26 tests. The first suite verifies the real signed document, checks that a single
 changed character breaks it, and asserts the file still has LF endings — that
 last one is a `.gitattributes` test in disguise, and the reason CI runs on
 Windows. Without `-text` on that file, git rewrites it on checkout there and the

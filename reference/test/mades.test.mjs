@@ -196,16 +196,85 @@ describe('sign → verify round trip', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('the known limitation', () => {
-  it('mistakes prose that quotes the opening marker for a block', () => {
-    // Documented rather than hidden. A document *about* MAdES — a tutorial, an
-    // issue, this specification — produces a phantom block, and a verifier that
-    // reports "modified" over it tells a reader the opposite of the truth.
-    //
-    // When the fix lands (marker only at line start, fenced regions skipped)
-    // this test flips to asserting zero blocks.
+describe('locating blocks (§a.1)', () => {
+  // Two rules, and both exist so that a document ABOUT MAdES can be signed with
+  // MAdES. Until v1.4 this was a raw byte scan, and every tutorial, issue and
+  // draft of this specification produced a phantom block — which a verifier
+  // then reported over, telling the reader the opposite of the truth.
+
+  it('ignores the marker inside a sentence', () => {
     const doc = 'A block opens with <!-- mades-sig and closes with -->.\n';
-    assert.equal(findBlocks(doc).length, 1, 'today it finds one; see SPEC.md open decisions');
-    assert.equal(signingInputForBlock(doc, 0).signature, null, 'and it carries no signature');
+    assert.equal(findBlocks(doc).length, 0);
+  });
+
+  it('ignores a whole block inside a fenced example', () => {
+    // The case that motivated the rule: this specification quotes complete
+    // blocks, and they are not signatures on it.
+    const doc = [
+      '# How to read a block', '',
+      '```', '<!-- mades-sig', 'version: 5', 'signer: alice@example.com', '-->', '```', '',
+    ].join('\n');
+    assert.equal(findBlocks(doc).length, 0);
+  });
+
+  it('ignores an indented marker, which Markdown renders as code', () => {
+    assert.equal(findBlocks('text\n\n    <!-- mades-sig\n    version: 5\n    -->\n').length, 0);
+  });
+
+  it('finds the real block in a document that also demonstrates one', () => {
+    // Both rules at once, which is the shape of every honest document about
+    // this format.
+    const doc = [
+      'Written like this:', '',
+      '```md', '<!-- mades-sig', 'version: 5', '-->', '```', '',
+      'and inline as <!-- mades-sig too.', '',
+      '<!-- mades-sig', 'version: 5', 'signer: alice@example.com', 'signature: AAAA', '-->', '',
+    ].join('\n');
+    const blocks = findBlocks(doc);
+    assert.equal(blocks.length, 1);
+    assert.equal(signingInputForBlock(doc, 0).fields.signer, 'alice@example.com');
+  });
+
+  it('closes a fence only with the same character, and at least as many', () => {
+    // CommonMark's rule. Getting it wrong reopens the hole: a ``` inside a
+    // ~~~~ region would end the region early and expose the example inside it.
+    const doc = ['~~~~', '```', '<!-- mades-sig', 'version: 5', '-->', '```', '~~~~', ''].join('\n');
+    assert.equal(findBlocks(doc).length, 0);
+  });
+
+  it('does not read a block\'s own contents as fences', () => {
+    const doc = ['<!-- mades-sig', 'version: 5', 'signature: AAAA', '-->', '', 'after', ''].join('\n');
+    assert.equal(findBlocks(doc).length, 1);
+    assert.equal(findBlocks(doc)[0].start, 0, 'a block at the very start of the file counts');
+  });
+
+  it('still refuses to treat an unterminated marker as a block', () => {
+    // The safe direction, unchanged: unsigned content must never read as signed.
+    assert.equal(findBlocks('text\n\n<!-- mades-sig\nversion: 5\n').length, 0);
+  });
+
+  it('SIGNS AND VERIFIES A DOCUMENT THAT DESCRIBES THE FORMAT', () => {
+    // The acceptance test for v1.4, and the reason it exists. Before these
+    // rules, this document could not be signed with the thing it specifies.
+    const { privateKey } = generateKeyPairSync('ed25519');
+    const publicKey = createPublicKey(privateKey);
+    const prose = [
+      '# The MAdES block', '',
+      'A block opens with <!-- mades-sig at the start of a line:', '',
+      '```', '<!-- mades-sig', 'version: 5', 'signer: bob@example.com', '-->', '```', '',
+    ].join('\n');
+    const fields = {
+      version: 5, algorithm: 'ed25519', signer: 'alice@example.com',
+      'signer-kind': 'human', commitment: 'approval', 'signed-at': '2026-08-14T10:00:00Z',
+    };
+
+    const draft = prose + '\n' + serializeBlock({ ...fields, signature: 'x' }) + '\n';
+    const { signingInput } = signingInputForBlock(draft, 0);
+    fields.signature = signRaw(null, Buffer.from(signingInput, 'utf8'), privateKey).toString('base64');
+
+    const doc = prose + '\n' + serializeBlock(fields) + '\n';
+    const back = signingInputForBlock(doc, 0);
+    assert.equal(findBlocks(doc).length, 1, 'the quoted example must not count as a signature');
+    assert.ok(verifyRaw(null, Buffer.from(back.signingInput, 'utf8'), publicKey, Buffer.from(back.signature, 'base64')));
   });
 });

@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.3 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
+> **Status:** Specification · **Version:** 1.4 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -155,6 +155,31 @@ an HTML block, displayed by nothing), stripped by GitHub, hidden in Obsidian's
 reading view, and dropped by Pandoc on export — while remaining fully visible in
 the source. Invisible in view, present in code, which is where a signature
 belongs.
+
+> **NORMATIVE (v1.4) — where a block may be found.** An implementation MUST
+> recognise the opening marker **only at the start of a line**, and MUST NOT
+> recognise it **inside a fenced code block**. A fence opens with three or more
+> backticks or tildes at the start of a line and closes with at least as many of
+> the same character; this is CommonMark's rule, so what a verifier skips is
+> exactly what a reader sees rendered as code.
+>
+> Both rules are byte-level and require no Markdown parser. That is deliberate:
+> an implementation that must *understand* the document to find the signature is
+> an implementation that disagrees with the next one about where the signature
+> was, and disagreement here reads as tampering.
+>
+> **This is a compatibility-preserving clarification, not a format change.** A
+> written block always begins its own line and never sits inside a fence, so no
+> document that verified under v1.3 verifies differently under v1.4 — verified on
+> the reference implementation against a real signed document.
+>
+> Without these rules, block location is a raw byte scan that cannot tell a
+> signature from a sentence describing one. Any document *about* MAdES — a
+> tutorial, an issue, this specification — produced a second block with no
+> signature in it, and a verifier reported over a sound document that it could
+> not be checked. **A specification could not be signed with the thing it
+> specifies**, which is a poor advertisement for a signature format and, more
+> seriously, a false failure. Those cost exactly what false successes cost (§d).
 
 > **NORMATIVE — the block body MUST NOT contain `--`.** An HTML comment ends at
 > the first `--`, so a block containing one is truncated: the closing `-->` is
@@ -1167,6 +1192,14 @@ of them. Vendor extensions via a reverse-DNS namespace (§a.1).
   Sign implementation, which arrived at the same answer independently of
   RFC 6648 and then supplied the piece that was missing: *who* decides whether a
   namespace is legitimate. A DNS name answers that by itself.
+- ~~**A document about MAdES cannot be signed with MAdES**~~ — **resolved**
+  (§a.1, v1.4). The marker counts only at the start of a line, and never inside
+  a fenced code block. Found by writing the specification's own examples: the
+  reference verifier reported a phantom block on a document whose signature was
+  sound. `examples/05-a-real-signed-document.md` still describes the limitation,
+  because it was signed before the fix and rewriting a signed document to make
+  it say something more flattering is the exact thing this format exists to
+  prevent.
 - ~~**Unknown signed fields are invisible**~~ — **resolved** (§d, v1.3). Also
   raised by the Vecto Sign implementation, and confirmed on both sides before it
   was written down: two independent verifiers preserved unknown signed fields

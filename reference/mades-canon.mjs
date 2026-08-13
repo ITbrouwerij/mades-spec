@@ -57,31 +57,70 @@ export function normalize(text) {
 /**
  * Every signature block in the document, in order.
  *
- * > **Known limitation.** This scans for the opening marker as raw bytes and
- * > cannot tell a signature from a sentence describing one. A document that
- * > quotes the marker — a tutorial, an issue, this specification — produces a
- * > phantom block with no signature, and a verifier then reports a valid
- * > document as broken. See the open decision in SPEC.md; the proposed fix is
- * > to recognise the marker only at the start of a line and to skip fenced
- * > code regions.
+ * TWO RULES, AND BOTH EXIST BECAUSE A SPECIFICATION MUST BE ABLE TO DESCRIBE
+ * ITSELF (§a.1, v1.4).
  *
- * An unterminated block is not a block. That is the safe direction: unsigned
- * content must never read as signed.
+ *   1. The opening marker counts only at the START OF A LINE.
+ *   2. Lines inside a FENCED CODE BLOCK are skipped.
+ *
+ * Before these, this was a raw `indexOf` and could not tell a signature from a
+ * sentence describing one. A document *about* MAdES — a tutorial, an issue, the
+ * specification itself — produced a phantom block with no signature, and a
+ * verifier reported a valid document as broken. Measured on a real signed
+ * document: two blocks, the first at offset 1540 being the prose
+ * "a block, opening with `<!-- mades-sig` and closing with `-->`".
+ *
+ * Both rules are byte-level on purpose. A parser that has to understand
+ * Markdown to find a signature is a parser that disagrees with the next one
+ * about where the signature was.
+ *
+ * Backward compatible by construction: a written block always begins its own
+ * line and never sits inside a fence, so no document that verified before
+ * verifies differently now.
+ *
+ * An unterminated block is still not a block. That is the safe direction:
+ * unsigned content must never read as signed.
  */
 export function findBlocks(content) {
   const blocks = [];
-  let from = 0;
-  for (;;) {
-    const start = content.indexOf(BLOCK_OPEN, from);
-    if (start === -1) break;
-    const end = content.indexOf(BLOCK_CLOSE, start);
+  const lines = content.split('\n');
+
+  let offset = 0;
+  let fence = null; // { ch, len } while inside a fenced code block
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineStart = offset;
+    offset += line.length + 1; // the '\n' we split on
+
+    // Fence tracking. A fence opens with three or more backticks or tildes and
+    // closes with at least as many of the SAME character and nothing else on
+    // the line — CommonMark's rule, which is what a reader's renderer uses.
+    const f = /^(`{3,}|~{3,})/.exec(line);
+    if (f) {
+      const ch = f[1][0];
+      const len = f[1].length;
+      if (!fence) fence = { ch, len };
+      else if (ch === fence.ch && len >= fence.len && line.slice(len).trim() === '') fence = null;
+      continue;
+    }
+    if (fence) continue;
+
+    if (!line.startsWith(BLOCK_OPEN)) continue;
+
+    const end = content.indexOf(BLOCK_CLOSE, lineStart);
     if (end === -1) break;
     blocks.push({
-      start,
+      start: lineStart,
       end: end + BLOCK_CLOSE.length,
-      body: content.slice(start + BLOCK_OPEN.length, end),
+      body: content.slice(lineStart + BLOCK_OPEN.length, end),
     });
-    from = end + BLOCK_CLOSE.length;
+
+    // Jump past the block, so its own contents are never scanned for fences.
+    while (i < lines.length - 1 && offset <= end) {
+      i += 1;
+      offset += lines[i].length + 1;
+    }
   }
   return blocks;
 }

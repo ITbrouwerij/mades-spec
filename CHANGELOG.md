@@ -9,6 +9,42 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.4 — 2026-08-14
+
+**A document about MAdES can now be signed with MAdES.**
+
+Block location gains two normative rules (§a.1). The opening marker counts only
+**at the start of a line**, and never **inside a fenced code block** — CommonMark's
+fence rule, so what a verifier skips is exactly what a reader sees rendered as
+code.
+
+**MINOR, not MAJOR: no existing signed document verifies differently.** A written
+block always begins its own line and never sits inside a fence. Checked rather
+than assumed — the real signed document in `examples/` verifies byte-identically
+before and after, and the reference suite went from 19 tests to 26 with one
+deliberate failure: the test that pinned the old behaviour, written to flip on
+exactly this change.
+
+Before these rules, block location was a raw byte scan. It could not tell a
+signature from a sentence describing one, so any document *about* the format
+produced a second block containing no signature, and a verifier reported over a
+sound document that it could not be checked. **A false failure, in a signature
+format.** Those cost precisely what false successes cost (§d), and this one hit
+the documents most likely to be read by someone deciding whether to trust the
+format at all.
+
+Both rules are byte-level and need no Markdown parser. That is the constraint
+that shaped them: an implementation that must *understand* a document to find
+its signature is one that disagrees with the next implementation about where the
+signature was — and disagreement, here, reads to a user as tampering.
+
+`examples/05-a-real-signed-document.md` still describes the limitation in its
+prose, and stays that way. It was signed before the fix; rewriting a signed
+document so it says something more flattering is the exact thing this format
+exists to prevent. It will be superseded by a new signature, not edited.
+
+---
+
 ## v1.3 — 2026-08-14
 
 First publication since v0.3. The specification moved a long way in between and
