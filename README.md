@@ -2,75 +2,203 @@
 
 [![Tests](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml/badge.svg)](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml)
 
-> **Status:** Draft proposal · **Version:** 0.3 · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
+> **Specification v1.2** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
 >
-> **Seeking peer review.** This is an early-stage proposal — not an accepted standard. Specific technical feedback (canonicalisation edge cases, algorithm choices, key-distribution model) is more valuable than a general "is this useful?" discussion.
+> An open specification for signing Markdown. Not the documentation of any one
+> product — a conforming implementation must be able to succeed knowing nothing
+> about the tools that happen to implement it today.
 
-## What is MAdES?
+**A signed `.md` file carries its own proof.** No detached `.sig` companion, no
+wrapper format, no database you have to trust. Copy the file, mail it, paste it
+in a chat — the signature travels with it, and anyone can check it.
 
-MAdES is a vendor-neutral specification for embedding cryptographic signatures **directly inside Markdown files** via a trailing fenced code block. The signature travels with the document — no separate `.sig` companion file, no orphan-file synchronisation problems, and the document still renders as plain Markdown in any viewer.
+---
 
-Think of MAdES as the Markdown analogue of [PAdES](https://en.wikipedia.org/wiki/PAdES) (PDF), [XAdES](https://en.wikipedia.org/wiki/XAdES) (XML), and [JAdES](https://www.etsi.org/deliver/etsi_ts/119100_119199/119182/01.01.01_60/ts_119182v010101p.pdf) (JSON Web Signatures). It targets the same eIDAS-style trust model, but for the format engineers actually write specs, ADRs, contracts and policies in.
-
-## The 30-second example
+## What it looks like
 
 ```markdown
 # Service Agreement
 
-This agreement between Acme Corp and Initech is valid until 2027-12-31.
+Acme Corp and Initech agree to the terms below, valid until 2027-12-31.
 
-~~~mades-sig
-# ✓ Signed by alice@acme.example — 2026-04-28
-version: 1
-algorithm: hmac-sha256
-signer: alice@acme.example
-signed-at: 2026-04-28T10:15:30Z
-signature: 7a3f...8b2c
-~~~
+<!-- mades-sig
+# ✓ Signed by alice@example.com — approval — human — 2026-08-12
+version: 5
+algorithm: ed25519
+signer: alice@example.com
+signer-kind: human
+commitment: approval
+signed-at: 2026-08-12T11:15:30+02:00
+lang: nl
+appearance:
+  mode: signature
+  digest: sha256:6f1c…
+certificate-chain:
+  - MIIB…
+  - MIIC…
+timestamp: MIAGCSqGSIb3…
+signature: 7a3f…8b2c
+-->
 ```
 
-That's it. The signature covers everything before its own opening fence. Verification is a strip-and-recompute. Multiple signers can append; the format supports both sequential signing and staged workflows (serial → parallel → final-signoff patterns).
+That is the whole format. The signature covers everything above the block, plus
+the block's own fields. Verification is strip-and-recompute.
 
-## Why this is interesting (or maybe useful)
+### Why an HTML comment and not a fenced code block
 
-- **Markdown is becoming a serious document format.** ADRs, RFCs, DAO governance, contracts-as-code, GitHub-rendered policies — all live in `.md`. They have **no native signing**. Today the best you can do is a detached `.sig` file (lost in copy-paste) or wrap the content in JWS (loses Markdown rendering).
-- **Single-file portability.** Copy the file. Forward in email. Drop in a chat. The signature stays attached.
-- **Renders as a code block in any Markdown viewer.** No special tooling required just to read the document. MAdES-aware renderers can show a richer badge; non-aware renderers show a YAML block with a human-readable header line.
-- **Bridges to existing standards.** The format intentionally mirrors PAdES/XAdES design patterns (incremental updates, signature widgets, profile tiers for eIDAS Basic/Advanced/Qualified) — so existing crypto + legal frameworks apply.
-- **Open standard intent.** Vendor-neutral field names. Vendor extensions live in an `x-` namespace. Anyone can implement.
+Because a fence *renders*. That is its definition, and it means every reader who
+opens a signed file in an ordinary viewer sees kilobytes of base64 where the
+document should be. Earlier drafts of this spec used `~~~mades-sig`, and that is
+exactly what happened.
 
-## Quick links
+An HTML comment is **invisible in view, present in source**: hidden by CommonMark
+renderers, stripped by GitHub, hidden in Obsidian's reading view, dropped by
+Pandoc on export — and fully there in the file, which is where a signature
+belongs.
 
-- 📜 [**Full specification (SPEC.md)**](SPEC.md)
-- 📚 [**Worked examples**](examples/)
-- 🛠️ [**Reference implementation (Node.js)**](reference/)
-- 📜 [**Changelog**](CHANGELOG.md)
+> **One normative consequence:** the block body must not contain `--`, because an
+> HTML comment ends at the first one. A block containing it is truncated, never
+> reaches its `-->`, and the document reads as *unsigned* rather than as invalid.
+> Base64 has no hyphen and field names carry single ones, so this holds by
+> construction — implementations must still check before emitting, because the
+> failure is silent and total.
+
+---
+
+## Why this exists
+
+Markdown became a serious document format while nobody was looking. ADRs, RFCs,
+governance proposals, policies, contracts-as-code, agent-written records — all
+live in `.md`, and none of it can be signed without leaving the format.
+
+Today the options are a detached `.sig` file (lost the first time someone
+copy-pastes) or wrapping the content in JWS (which stops being Markdown). MAdES
+is the third option: the same trust model as [PAdES](https://en.wikipedia.org/wiki/PAdES)
+(PDF), [XAdES](https://en.wikipedia.org/wiki/XAdES) (XML) and JAdES (JSON), for
+the format engineers actually write in.
+
+**And one question the others never had to ask.** Markdown is where humans and
+machines take turns. A commit message, a generated report, a decision minuted by
+an agent — the document does not say which of the two signed it. Since v5, MAdES
+does: `signer-kind` is mandatory, closed, and binary (`human` | `automated`), it
+sits inside the signed fields, and the certificate carries the same claim so a
+verifier can hold the two against each other.
+
+---
+
+## What a signature actually covers
+
+The **signing input** is built, in order, from:
+
+1. the canonicalised content above the block,
+2. every comment line inside the block, in document order,
+3. the fields, sorted by key name.
+
+`signature` and `timestamp` are excluded — everything else is covered, including
+fields a given implementation does not recognise.
+
+Two rules make that trustworthy rather than merely defined:
+
+- **Parsing is total.** Every line inside the block is a comment, a blank, or a
+  well-formed field. There is no fourth category; anything else makes the block
+  `unsupported`, not `invalid`.
+- **What is signed is what is written.** No allowlist at serialisation time. An
+  implementation that meets a field it has never heard of still signs it, still
+  writes it, and still reports it.
+
+Both exist because of a measured failure. Before they did, a line reading
+`# WARNING: this contract has been declared void` could be added inside a signed
+block without breaking the signature — and that block is precisely what a reader
+sees in a plain text editor.
+
+---
+
+## What is in the spec
+
+| | |
+|---|---|
+| **§a** Format | the block, canonicalisation, the signing input, commitment types, verification, representation binding, revision chaining, appearance, language, rendering order, signer category |
+| **§b** Multi-signer | sequential append by default; pre-declared signature fields for staged workflows; pure-parallel deliberately excluded |
+| **§c** Cryptography | asymmetric for personal signatures, short-lived certificates, trust anchoring, timestamping, container formats, key distribution |
+| **§d** Visual | how a signed document may present itself without the appearance becoming load-bearing |
+| **§e–h** | tooling, integration, compliance and conformance, roll-out |
+
+Read it here: **[SPEC.md](SPEC.md)**.
+
+### Two design choices worth knowing before you read
+
+**Keys live for minutes, not years.** A signer's certificate is minted for the
+ceremony and destroyed after it. What makes the signature outlive the key is the
+timestamp: it proves the signature existed while the certificate was valid. An
+expired certificate on a MAdES signature is normal and is not a finding.
+
+**Pure-parallel signing is not supported, on purpose.** Two signers cannot each
+sign the same bytes and have both results merge cleanly, because the second
+signature changes what the first covered. The spec says so plainly rather than
+leaving implementers to discover it.
+
+---
+
+## Verifying, in four steps
+
+1. Find the block, parse it totally, read its `version` — the block's own version
+   decides which rules apply to it, not the reader's preference.
+2. Rebuild the signing input from the file.
+3. Check the signature against the certificate in the file, and the chain against
+   your trust anchor.
+4. Check the timestamp covers the signature value and falls inside the
+   certificate's validity window.
+
+If a block declares a version you do not implement, say so. **Do not report it as
+modified.** A false red on a verification page costs exactly as much as a false
+green — the reader came there for certainty and leaves with the wrong one.
+
+---
+
+## Getting started
+
+- 📜 [**SPEC.md**](SPEC.md) — the specification
+- 📚 [**examples/**](examples/) — worked documents
+- 🛠️ [**reference/**](reference/) — a minimal Node.js implementation
+- 📝 [**CHANGELOG.md**](CHANGELOG.md) — what changed per version, and why
+
+---
 
 ## Status
 
-**This is a draft proposal seeking peer review.** No part of MAdES is implemented in production-grade tooling yet. The reference scripts in [`reference/`](reference/) are functional but minimal — they're a proof of "this works", not a hardened production library.
+MAdES is **implemented and in use**, not a paper proposal: there is a production
+implementation signing real documents with real certificates and timestamps, and
+the block format has been through five versions of measured failure.
 
-Specific feedback I'm looking for:
+It is still **not an accepted standard**, and it will not become one by being
+declared one. That is the part where outside eyes are worth more than more
+internal iterations.
 
-1. **Canonicalisation rule** (SPEC.md § a) — does the trim+normalise rule break in any edge case I haven't thought of? UTF-8 BOM, CRLF vs LF, fenced-code-blocks containing `~~~` themselves, etc.
-2. **Algorithm matrix** (SPEC.md § c) — is the `hmac-sha256` baseline + optional `ed25519`/`ecdsa-p256`/`rsa-pss-sha256` ladder the right ramp? Did I miss something obvious?
-3. **Key distribution** (SPEC.md § c) — `.well-known/mades-keys` + DID URLs + vendor registries. Is the precedence sensible? Is there a better pattern from JOSE / OpenID land?
-4. **Workflow expressivity** (SPEC.md § b) — does the `mades-sig-fields` stages syntax cover real document-signing-workflow patterns (DocuSign / Adobe Sign equivalents)?
-5. **eIDAS profile mapping** (SPEC.md § g) — am I oversimplifying the legal tiers? Real-world legal review wanted.
+Specific feedback that helps most:
 
-## Provenance
+1. **Canonicalisation edge cases** (§a.2) — BOM, CRLF, nested fences, trailing
+   whitespace in code blocks. Where does the rule bite?
+2. **The signing-input construction** (§a.3) — is sorting by key name the right
+   call against a canonical serialisation like JCS?
+3. **Trust anchoring and key distribution** (§c.4, §c.7) — is the precedence
+   sensible next to what JOSE and OpenID already do?
+4. **The signer-category model** (§a.11) — is `human` / `automated` the right
+   split, and is binding it to the certificate the right enforcement?
+5. **eIDAS profile mapping** (§g) — legal review genuinely wanted.
 
-Originally proposed by Jan Smets - ITbrouwerij ([itbrouwerij.be](https://itbrouwerij.be)).
+Issues and pull requests are both welcome; ports to other languages especially.
 
-Reference implementation lives in this repo. The MAdES specification itself is intended as a vendor-neutral open standard — vendor extensions go in the `x-` field-prefix namespace.
+---
 
-## License
+## Provenance & licence
 
-- **Specification text** ([`SPEC.md`](SPEC.md), [`README.md`](README.md), [`CHANGELOG.md`](CHANGELOG.md), [`examples/`](examples/)): [Creative Commons Attribution 4.0 International (CC-BY-4.0)](LICENSE-SPEC). Promote, fork, implement, criticise — please attribute.
-- **Reference code** ([`reference/`](reference/)): [MIT](LICENSE-CODE).
+Authored by **Jan Smets** — [ITbrouwerij](https://itbrouwerij.be).
 
-## Contributing / feedback
+MAdES is intended as a vendor-neutral open standard. Vendor-specific fields
+belong in the `x-` namespace and never in the core.
 
-- **Issues** → for spec discussion, edge-cases, algorithm questions, naming bikesheds
-- **Pull requests** → especially for examples, reference-implementation hardening, language ports (Python / Rust / Go welcome)
-- **Forum threads** → cross-posts on [CommonMark Talk](https://talk.commonmark.org), Hacker News, etc. linked from this repo's [Discussions](../../discussions)
+- **Specification text** ([SPEC.md](SPEC.md), [README.md](README.md),
+  [CHANGELOG.md](CHANGELOG.md), [examples/](examples/)) —
+  [CC-BY-4.0](LICENSE-SPEC). Fork it, implement it, criticise it; please
+  attribute.
+- **Reference code** ([reference/](reference/)) — [MIT](LICENSE-CODE).
