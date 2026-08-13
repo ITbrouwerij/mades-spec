@@ -20,6 +20,7 @@ import {
 } from '../mades-canon.mjs';
 
 const REAL = new URL('../../examples/05-a-real-signed-document.md', import.meta.url);
+const ABOUT = new URL('../../examples/06-signing-a-document-about-signing.md', import.meta.url);
 
 // ---------------------------------------------------------------------------
 
@@ -73,6 +74,40 @@ describe('a real signed document', () => {
     // sound signature is broken.
     const { signingInput } = signingInputForBlock(document, 0);
     assert.ok(signingInput.includes('data:image/'), 'the embedded seal belongs in the signing input');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('a signed document that describes signing', () => {
+  // The v1.4 rules, proven on a real artefact rather than on a fixture built to
+  // pass. This document quotes the opening marker in full four times and
+  // contains a complete block inside a fence. Under the pre-v1.4 byte scan it
+  // yielded two blocks, and a verifier reported over a sound document that it
+  // could not be checked.
+  const document = readFileSync(ABOUT, 'utf8');
+
+  it('quotes the opening marker in full, repeatedly', () => {
+    // If this ever drops to zero the test below proves nothing: a document that
+    // does not mention the marker cannot demonstrate the rule.
+    const quotes = (document.match(/<!-- mades-sig/g) ?? []).length;
+    assert.ok(quotes >= 3, `expected the marker quoted several times, found ${quotes}`);
+  });
+
+  it('contains exactly ONE block regardless', () => {
+    assert.equal(findBlocks(document).length, 1);
+  });
+
+  it('VERIFIES from the file alone', () => {
+    const d = signingInputForBlock(document, 0);
+    const leaf = new X509Certificate(Buffer.from(d.fields['certificate-chain'][0], 'base64'));
+    const v = createVerify('sha256');
+    v.update(d.signingInput, 'utf8');
+    assert.ok(v.verify(leaf.publicKey, Buffer.from(d.signature, 'base64')));
+  });
+
+  it('survives checkout with its bytes intact', () => {
+    assert.ok(!document.includes('\r'), 'the file must be stored and checked out with LF endings');
   });
 });
 

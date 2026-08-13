@@ -38,10 +38,21 @@ that shaped them: an implementation that must *understand* a document to find
 its signature is one that disagrees with the next implementation about where the
 signature was — and disagreement, here, reads to a user as tampering.
 
+**New example: `06-signing-a-document-about-signing.md`**, signed by a real
+service with a real certificate and an RFC 3161 timestamp. It quotes the opening
+marker in full four times and carries a complete block inside a fence — under
+the old byte scan it yielded two blocks, and the verifier reported over a sound
+document that it could not be checked. It now yields one, and verifies. The
+reference suite asserts both, so the rule is pinned to a real artefact rather
+than to a fixture built to pass.
+
 `examples/05-a-real-signed-document.md` still describes the limitation in its
 prose, and stays that way. It was signed before the fix; rewriting a signed
 document so it says something more flattering is the exact thing this format
-exists to prevent. It will be superseded by a new signature, not edited.
+exists to prevent. `06` supersedes it editorially — in prose that falls under
+its own signature, not through the `revision`/`supersedes` chain of §a.7, which
+means something narrower and stronger than what is true between two separate
+documents.
 
 ---
 

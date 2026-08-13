@@ -18,5 +18,9 @@
 #
 # `-text` means: no conversion, in either direction, ever. Verify with
 # `git check-attr text eol -- <file>`; it must report `text: unset`.
-examples/05-a-real-signed-document.md   -text
-*.pdf                                   binary
+# Listed one by one, not matched with a pattern. A pattern that silently stops
+# covering a new file protects nothing, and the failure it lets through is
+# invisible until a stranger reports it.
+examples/05-a-real-signed-document.md          -text
+examples/06-signing-a-document-about-signing.md -text
+*.pdf                                          binary

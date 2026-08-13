@@ -7,7 +7,7 @@ built-ins only. Node 20+.
 mades-canon.mjs    block location, parsing, canonicalisation, signing input
 mades-verify.mjs   verify a document using nothing but the document
 mades-sign.mjs     append a signature, signing with a local key
-test/              26 tests, including one against a real signed document
+test/              31 tests, including two against real signed documents
 ```
 
 ## Verify
@@ -79,6 +79,11 @@ Both rules are byte-level; neither needs a Markdown parser. A verifier that has
 to *understand* a document to find its signature is one that disagrees with the
 next verifier about where the signature was.
 
+`../examples/06-signing-a-document-about-signing.md` is the proof, and it is a
+real signed document rather than a fixture built to pass: it quotes the opening
+marker in full four times and carries a complete block inside a fence. The old
+byte scan found two blocks in it. The rules find one, and it verifies.
+
 `../examples/05-a-real-signed-document.md` still describes the limitation in its
 prose. It was signed before the fix, and rewriting a signed document to make it
 say something more flattering is the exact thing this format exists to prevent.
@@ -89,7 +94,7 @@ say something more flattering is the exact thing this format exists to prevent.
 npm test
 ```
 
-26 tests. The first suite verifies the real signed document, checks that a single
+31 tests. The first suite verifies the real signed document, checks that a single
 changed character breaks it, and asserts the file still has LF endings — that
 last one is a `.gitattributes` test in disguise, and the reason CI runs on
 Windows. Without `-text` on that file, git rewrites it on checkout there and the

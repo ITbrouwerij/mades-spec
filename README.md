@@ -158,7 +158,11 @@ green — the reader came there for certainty and leaves with the wrong one.
 ## Getting started
 
 - 📜 [**SPEC.md**](SPEC.md) — the specification
-- 📚 [**examples/**](examples/) — worked documents
+- 📚 [**examples/**](examples/) — worked documents, including two signed by a
+  real service: [`05`](examples/05-a-real-signed-document.md) with its
+  [PDF](examples/05-a-real-signed-document.pdf), and
+  [`06`](examples/06-signing-a-document-about-signing.md), which quotes the
+  opening marker four times and is signed anyway
 - 🛠️ [**reference/**](reference/) — a minimal Node.js implementation
 - 📝 [**CHANGELOG.md**](CHANGELOG.md) — what changed per version, and why
 
