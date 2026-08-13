@@ -1,195 +1,262 @@
 /**
- * MAdES canonicalisation + sig-block parsing.
+ * MAdES core — block location, parsing, canonicalisation, signing input.
  *
- * Pure functions, zero dependencies, used by sign + verify.
+ * Zero dependencies. Node built-ins only.
  *
- * Per SPEC.md § a:
- *   1. Locate the sig-block to verify.
- *   2. Strip from the opening `~~~mades-sig` line through the closing `~~~`,
- *      inclusive of any trailing whitespace.
- *   3. Normalise the remaining content: strip trailing whitespace per line,
- *      ensure single trailing newline, leave all other bytes untouched.
- *   4. Recompute the signature using the algorithm field; compare.
+ * This is the piece every implementation has to get byte-identical, so it is
+ * written to be read rather than to be clever. Everything below follows
+ * SPEC.md §a.1–§a.3; where a rule looks arbitrary, the comment says which
+ * failure it came from.
+ *
+ * Verified against `examples/05-a-real-signed-document.md` — a document signed
+ * by a real service with a real certificate. A reference implementation checked
+ * only against its own output proves that the encoder and the decoder agree
+ * with each other, which is not the property anyone needs.
  */
 
-const SIG_OPEN = '~~~mades-sig';
-const SIG_CLOSE = '~~~';
+const BLOCK_OPEN = '<!-- mades-sig';
+const BLOCK_CLOSE = '-->';
+
+/** Excluded from the signing input. Everything else is covered (§a.3). */
+const UNSIGNED_FIELDS = new Set(['signature', 'timestamp']);
 
 /**
- * Normalise a chunk of markdown for hashing: strip trailing whitespace per
- * line, normalise CRLF → LF, ensure exactly one trailing newline.
+ * Field names.
  *
- * Deliberately conservative: leaves all bytes inside lines untouched
- * (no Unicode normalisation, no whitespace collapsing inside paragraphs).
- *
- * @param {string} text
- * @returns {string}
+ * Dots are allowed because vendor fields carry a reverse-DNS namespace
+ * (§a.1) — `build.vecto.void`. An earlier pattern of `[A-Za-z0-9_-]+` rejected
+ * exactly the names the specification requires, which made every vendor field
+ * `unsupported` rather than understood.
  */
-export function canonicalise(text) {
-  // CRLF → LF (universal text-file convention)
-  let out = text.replace(/\r\n/g, '\n');
-  // Strip trailing whitespace on every line
-  out = out.split('\n').map((line) => line.replace(/[ \t]+$/, '')).join('\n');
-  // Single trailing newline (no leading)
-  out = out.replace(/\n+$/, '') + '\n';
-  return out;
+const KEY = '[A-Za-z0-9_.-]+';
+
+// ---------------------------------------------------------------------------
+// §a.2 Canonicalisation
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalise content for hashing.
+ *
+ * Deliberately conservative: nothing inside a line is touched. No Unicode
+ * normalisation, no whitespace collapsing. Two systems must agree on bytes, and
+ * every additional transformation is another place they can disagree.
+ */
+export function normalize(text) {
+  let s = text;
+  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1); // strip BOM
+  s = s.replace(/\r\n?/g, '\n'); // CRLF and lone CR become LF
+  s = s.split('\n').map((l) => l.replace(/[ \t]+$/, '')).join('\n'); // trailing ws
+  s = s.replace(/\n+$/, ''); // collapse trailing newlines
+  return s.length === 0 ? '' : s + '\n'; // exactly one, unless empty
 }
 
+// ---------------------------------------------------------------------------
+// §a.1 Locating blocks
+// ---------------------------------------------------------------------------
+
 /**
- * Parse a complete markdown document into a sequence of sig-blocks plus the
- * content runs between/around them. Used by both sign (to find where to
- * append) and verify (to walk back-to-front).
+ * Every signature block in the document, in order.
  *
- * Returns:
- *   {
- *     prefix: string,           // content before any sig-block
- *     blocks: Array<{
- *       startLine: number,      // 0-based line index of opening fence
- *       endLine: number,        // 0-based line index of closing fence (inclusive)
- *       yamlBody: string,       // raw YAML lines between the fences
- *       parsed: object,         // minimal YAML parse (key: value)
- *       priorContent: string,   // canonicalised content before this block (= what was signed)
- *     }>,
- *     trailingContent: string,  // content after last sig-block (usually empty)
- *   }
+ * > **Known limitation.** This scans for the opening marker as raw bytes and
+ * > cannot tell a signature from a sentence describing one. A document that
+ * > quotes the marker — a tutorial, an issue, this specification — produces a
+ * > phantom block with no signature, and a verifier then reports a valid
+ * > document as broken. See the open decision in SPEC.md; the proposed fix is
+ * > to recognise the marker only at the start of a line and to skip fenced
+ * > code regions.
  *
- * @param {string} text
+ * An unterminated block is not a block. That is the safe direction: unsigned
+ * content must never read as signed.
  */
-export function parseDocument(text) {
-  const lines = text.replace(/\r\n/g, '\n').split('\n');
+export function findBlocks(content) {
   const blocks = [];
+  let from = 0;
+  for (;;) {
+    const start = content.indexOf(BLOCK_OPEN, from);
+    if (start === -1) break;
+    const end = content.indexOf(BLOCK_CLOSE, start);
+    if (end === -1) break;
+    blocks.push({
+      start,
+      end: end + BLOCK_CLOSE.length,
+      body: content.slice(start + BLOCK_OPEN.length, end),
+    });
+    from = end + BLOCK_CLOSE.length;
+  }
+  return blocks;
+}
 
-  let i = 0;
-  while (i < lines.length) {
-    if (lines[i].trim() === SIG_OPEN) {
-      const startLine = i;
-      // Find closing fence
-      let j = i + 1;
-      while (j < lines.length && lines[j].trim() !== SIG_CLOSE) j++;
-      if (j >= lines.length) {
-        throw new Error(`Unterminated mades-sig block starting at line ${startLine + 1}`);
+// ---------------------------------------------------------------------------
+// §a.5 Parsing is total
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a block body into fields, comment lines, and whatever could not be read.
+ *
+ * **Every line is one of three things**: a comment, a blank, or a well-formed
+ * field. There is no fourth category. Anything else lands in `unparsed`, and a
+ * block with unparsed lines is `unsupported` — not invalid, and never silently
+ * accepted.
+ *
+ * Before this rule existed, a bare line was appended to the previous field's
+ * value or dropped. The consequence was not academic: a line reading
+ * `# WARNING: this contract has been declared void` could be placed inside a
+ * signed block without breaking the signature, and that block is exactly what a
+ * reader sees in a plain text editor.
+ */
+export function parseBlockBody(body) {
+  const fields = {};
+  const comments = [];
+  const unparsed = [];
+  let pendingKey = null;
+  let container = null; // 'list' | 'map'
+
+  for (const raw of body.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    if (line.trim() === '') continue;
+    if (line.trimStart().startsWith('#')) {
+      comments.push(line);
+      continue;
+    }
+
+    // Indented: a list item or a sub-key belonging to the previous key.
+    if (/^[ \t]/.test(line) && pendingKey) {
+      const item = /^[ \t]+-[ \t]+(.*)$/.exec(line);
+      if (item) {
+        if (container === null) { container = 'list'; fields[pendingKey] = []; }
+        if (container === 'list') fields[pendingKey].push(item[1].trim());
+        continue;
       }
-      const yamlBody = lines.slice(startLine + 1, j).join('\n');
-      const parsed = parseSimpleYaml(yamlBody);
-      blocks.push({ startLine, endLine: j, yamlBody, parsed, priorContent: '' });
-      i = j + 1;
-    } else {
-      i++;
+      const sub = new RegExp(`^[ \\t]+(${KEY}):[ \\t]*(.*)$`).exec(line);
+      if (sub) {
+        if (container === null) { container = 'map'; fields[pendingKey] = {}; }
+        if (container === 'map') fields[pendingKey][sub[1]] = sub[2].trim();
+      } else {
+        unparsed.push(line); // indented, but neither — do not discard it
+      }
+      continue;
     }
+
+    const kv = new RegExp(`^(${KEY}):[ \\t]*(.*)$`).exec(line);
+    if (!kv) { unparsed.push(line); continue; }
+    const [, key, value] = kv;
+    pendingKey = value === '' ? key : null;
+    container = null;
+    if (value !== '') fields[key] = value.trim();
   }
 
-  // Compute prior content per block (= canonicalised text from start through
-  // the line BEFORE the opening fence, with everything from opening fence
-  // onwards stripped).
-  for (let b = 0; b < blocks.length; b++) {
-    const upTo = blocks[b].startLine; // exclusive
-    const priorRaw = lines.slice(0, upTo).join('\n');
-    blocks[b].priorContent = canonicalise(priorRaw);
-  }
+  return { fields, comments, unparsed };
+}
 
-  const prefix = blocks.length > 0
-    ? canonicalise(lines.slice(0, blocks[0].startLine).join('\n'))
-    : canonicalise(text);
+// ---------------------------------------------------------------------------
+// §a.3 The signing input
+// ---------------------------------------------------------------------------
 
-  const lastEnd = blocks.length > 0 ? blocks[blocks.length - 1].endLine + 1 : lines.length;
-  const trailingContent = lines.slice(lastEnd).join('\n');
-
-  return { prefix, blocks, trailingContent };
+/** Which rules a block is read under. The block's own version decides. */
+export function rulesFor(fields) {
+  const declared = Number(fields.version);
+  if (declared >= 5) return 5;
+  return declared >= 4 ? 4 : 3;
 }
 
 /**
- * Minimal YAML parser sufficient for sig-block fields.
+ * Render one field.
  *
- * Supports:
- *   - `key: value` flat pairs
- *   - String values (with or without quotes)
- *   - Comment lines starting with `#` (ignored)
- *
- * Does NOT support: nested maps, arrays, multi-line strings, anchors, tags.
- * Sig-blocks are intentionally simple — if a real YAML parser is needed,
- * swap this out (the parsed map shape stays the same).
- *
- * @param {string} yamlText
- * @returns {Record<string, string>}
+ * Nested maps emit their sub-keys sorted, so rendering and signing agree. An
+ * empty list or map is omitted entirely: a bare `key:` would parse back as
+ * absent and break the round-trip.
  */
-export function parseSimpleYaml(yamlText) {
-  const result = {};
-  for (const rawLine of yamlText.split('\n')) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    let value = line.slice(colonIdx + 1).trim();
-    // Strip wrapping quotes
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    result[key] = value;
+function renderField(lines, key, value) {
+  if (value === undefined || value === null) return;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return;
+    lines.push(`${key}:`);
+    for (const item of value) lines.push(`  - ${item}`);
+  } else if (typeof value === 'object') {
+    const subKeys = Object.keys(value).filter((k) => value[k] != null).sort();
+    if (subKeys.length === 0) return;
+    lines.push(`${key}:`);
+    for (const k of subKeys) lines.push(`  ${k}: ${value[k]}`);
+  } else {
+    lines.push(`${key}: ${value}`);
   }
-  return result;
 }
 
 /**
- * Produce a human-readable comment line for the YAML-comment header (Level 1
- * visual representation per SPEC.md § d).
+ * The metadata half of the signing input: comment lines, then fields sorted by
+ * key name.
  *
- * @param {{ signer: string; signedAt: string; algorithm: string; field?: string }} info
- * @returns {string}
+ * v3 covered only the FIRST comment line. A second line therefore appeared in
+ * the block but not in what was signed — see the warning in `parseBlockBody`.
+ * v4 covers them all. v3 blocks keep being read under v3 rules, because
+ * anything else would break every signature that already exists.
  */
-export function buildHeaderComment({ signer, signedAt, algorithm, field }) {
-  const date = signedAt.split('T')[0];
-  const profile = algorithm === 'hmac-sha256'
-    ? 'MAdES-Basic'
-    : algorithm.startsWith('ed25519') || algorithm.startsWith('ecdsa')
-      ? 'MAdES-Advanced'
-      : 'MAdES-Qualified';
-  const fieldPart = field ? ` [field: ${field}]` : '';
-  return `# ✓ Signed by ${signer} — ${date} (${algorithm}, ${profile})${fieldPart}`;
-}
-
-/**
- * Algorithm registry. Each entry knows how to produce + verify a signature.
- *
- * v0.3 reference implementation supports HMAC-SHA256 (MAdES-Basic baseline).
- * Ed25519 / ECDSA-P256 / RSA-PSS are recognised in the spec but require
- * either WebCrypto subtle or explicit key material — left as TODO for v0.4.
- */
-export const ALGORITHMS = {
-  'hmac-sha256': {
-    profile: 'MAdES-Basic',
-    /**
-     * @param {string} canonicalContent
-     * @param {{ secret: string }} key
-     * @returns {Promise<string>} hex signature
-     */
-    async sign(canonicalContent, key) {
-      const { createHmac } = await import('node:crypto');
-      return createHmac('sha256', key.secret).update(canonicalContent, 'utf8').digest('hex');
-    },
-    /**
-     * @param {string} canonicalContent
-     * @param {string} signatureHex
-     * @param {{ secret: string }} key
-     * @returns {Promise<boolean>}
-     */
-    async verify(canonicalContent, signatureHex, key) {
-      const expected = await this.sign(canonicalContent, key);
-      return constantTimeEqual(expected, signatureHex);
-    },
-  },
-};
-
-/**
- * Constant-time string comparison (prevents timing attacks on signature
- * verification). Both inputs must be hex-encoded.
- */
-function constantTimeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+function canonicalMetadata(fields, comments, rules) {
+  const lines = [];
+  lines.push(...(rules >= 4 ? comments : comments.slice(0, 1)));
+  for (const key of Object.keys(fields).filter((k) => !UNSIGNED_FIELDS.has(k)).sort()) {
+    renderField(lines, key, fields[key]);
   }
-  return mismatch === 0;
+  return lines.join('\n');
 }
+
+/** Content up to the given block, canonicalised. */
+export function canonicalize(content, blockIndex) {
+  const blocks = findBlocks(content);
+  const idx = blockIndex === undefined ? blocks.length : blockIndex;
+  if (idx < 0 || idx > blocks.length) {
+    throw new RangeError(`block index ${idx} out of range (0..${blocks.length})`);
+  }
+  const upTo = idx === blocks.length ? content.length : blocks[idx].start;
+  return normalize(content.slice(0, upTo));
+}
+
+/**
+ * Rebuild what a given block signed, from the document alone.
+ *
+ * This is the function a recipient runs. It takes the file and nothing else —
+ * no database, no memory of how the document was produced.
+ */
+export function signingInputForBlock(content, blockIndex) {
+  const blocks = findBlocks(content);
+  const block = blocks[blockIndex];
+  if (!block) throw new RangeError(`no block at index ${blockIndex}`);
+
+  const { fields, comments, unparsed } = parseBlockBody(block.body);
+  const rules = rulesFor(fields);
+
+  return {
+    signingInput: canonicalize(content, blockIndex) + '\n' + canonicalMetadata(fields, comments, rules),
+    fields,
+    comments,
+    unparsed,
+    rules,
+    signature: typeof fields.signature === 'string' ? fields.signature : null,
+  };
+}
+
+/** Serialise a block for writing into a document. */
+export function serializeBlock(fields, comments = []) {
+  const lines = [...comments];
+  const order = [
+    'version', 'algorithm', 'signer', 'signer-kind', 'automation', 'commitment',
+    'signed-at', 'lang', 'appearance', 'revision', 'supersedes', 'represents',
+    'key-id', 'field', 'format', 'certificate-chain', 'timestamp', 'signature',
+  ];
+  const seen = new Set(order);
+  // Ordering, not a filter: every field is written, known or not (§a.10).
+  for (const key of order) if (key in fields) renderField(lines, key, fields[key]);
+  for (const key of Object.keys(fields).sort()) {
+    if (!seen.has(key)) renderField(lines, key, fields[key]);
+  }
+  const body = lines.join('\n');
+  if (body.includes('--')) {
+    // An HTML comment ends at the first `--`. A block containing one is
+    // truncated, never reaches its `-->`, and the document reads as UNSIGNED
+    // rather than invalid. Silent and total, so it is checked before emitting.
+    throw new Error('block body contains `--`, which would truncate the comment (§a.1)');
+  }
+  return `${BLOCK_OPEN}\n${body}\n${BLOCK_CLOSE}`;
+}
+
+export { BLOCK_OPEN, BLOCK_CLOSE, UNSIGNED_FIELDS };

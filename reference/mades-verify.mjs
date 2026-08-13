@@ -1,216 +1,275 @@
 #!/usr/bin/env node
 /**
- * mades-verify — validate MAdES signatures in a Markdown file.
+ * MAdES verifier — checks a signed document using nothing but the document.
  *
- * Walks all `~~~mades-sig` blocks back-to-front. For each: reconstructs the
- * canonical content as it existed when that block was added, recomputes the
- * signature, compares with the stored value.
+ *   node mades-verify.mjs <file.md>
+ *   node mades-verify.mjs <file.md> --anchor root.pem
  *
- * Usage:
- *   mades-verify --input doc.md --secret <hex|file>
- *   mades-verify --input doc.md --keys-manifest keys.json
+ * Zero dependencies. Node built-ins only.
  *
- * Required:
- *   --input <file>          Markdown file to verify
+ * **The whole point is that this needs no context.** No database, no key
+ * server, no memory of how the document was produced. If it cannot be checked
+ * from the file alone, it is not a MAdES signature.
  *
- * One of:
- *   --secret <hex|file>     Shared HMAC secret (for hmac-sha256 algorithm)
- *   --keys-manifest <file>  JSON file mapping key-id → key material
- *                           (v0.4+ — for non-HMAC algorithms)
- *
- * Optional:
- *   --json                  Output machine-readable JSON instead of human text
- *   --strict                Exit non-zero if any signature invalid OR any
- *                           required field unsigned
- *   --help                  Show this message
- *
- * Exit codes:
- *   0 = all signatures valid + (if --strict) all required fields filled
- *   1 = at least one signature invalid
- *   2 = (with --strict) signatures valid but required fields unsigned
- *   3 = error (IO, parse)
+ * That sounds obvious and is the thing implementations get wrong. A verifier
+ * that rebuilds the document from its own stored pieces proves that the encoder
+ * and the decoder agree with each other — which is not the property a recipient
+ * needs. Ours did exactly that, and reported `signature does NOT verify` over a
+ * signature that was perfectly sound.
  */
+import { createVerify, createPublicKey, verify as verifyRaw, X509Certificate } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
-import { readFileSync, existsSync } from 'node:fs';
-import { parseDocument, ALGORITHMS } from './mades-canon.mjs';
+import { findBlocks, signingInputForBlock } from './mades-canon.mjs';
 
-function usage() {
-  console.error(`mades-verify — validate MAdES signatures in a Markdown file.
+const KNOWN_FIELDS = new Set([
+  'version', 'algorithm', 'signer', 'signer-kind', 'automation', 'commitment',
+  'signed-at', 'lang', 'appearance', 'revision', 'supersedes', 'represents',
+  'key-id', 'field', 'format', 'certificate-chain', 'timestamp', 'signature',
+]);
 
-Usage:
-  mades-verify --input doc.md --secret <hex|file>
-  mades-verify --input doc.md --keys-manifest keys.json
+/** Node's verifier names, keyed by the `algorithm` field (§c.1). */
+const ALGORITHMS = {
+  'ed25519': null, // Ed25519 signs the message directly; no separate digest
+  'ecdsa-p256': 'sha256',
+  'rsa-sha256': 'sha256',
+  'rsa-pss-sha256': 'sha256',
+};
 
-Optional:
-  --json     Output machine-readable JSON
-  --strict   Exit non-zero if required fields unsigned
+const C = process.stdout.isTTY
+  ? { dim: '\x1b[2m', bold: '\x1b[1m', green: '\x1b[32m', red: '\x1b[31m', yellow: '\x1b[33m', reset: '\x1b[0m' }
+  : { dim: '', bold: '', green: '', red: '', yellow: '', reset: '' };
 
-Exit codes: 0=ok, 1=invalid signature, 2=incomplete (--strict only), 3=error
-`);
+const ok = (m) => console.log(`  ${C.green}ok${C.reset}    ${m}`);
+const bad = (m) => { failures++; console.log(`  ${C.red}FAIL${C.reset}  ${m}`); };
+const note = (m) => console.log(`  ${C.yellow}?${C.reset}     ${m}`);
+const info = (k, v) => console.log(`        ${C.dim}${String(k).padEnd(14)}${C.reset}${v}`);
+
+let failures = 0;
+let verified = 0;   // blocks whose signature was actually checked
+let withheld = 0;   // blocks on which no verdict could be offered
+
+// ---------------------------------------------------------------------------
+
+const file = process.argv[2];
+if (!file) {
+  console.error('usage: mades-verify.mjs <file.md> [--anchor root.pem]');
+  process.exit(2);
+}
+const anchorArg = process.argv.indexOf('--anchor');
+const anchorPem = anchorArg !== -1 ? readFileSync(process.argv[anchorArg + 1], 'utf8') : null;
+// The raw-key path (§c.7): a document signed without a certificate names its
+// key with `key-id`, and the reader has to hold that key already.
+const keyArg = process.argv.indexOf('--key');
+const publicKeyPem = keyArg !== -1 ? readFileSync(process.argv[keyArg + 1], 'utf8') : null;
+
+const document = readFileSync(file, 'utf8');
+const blocks = findBlocks(document);
+
+console.log(`${C.bold}${file}${C.reset} ${C.dim}— ${Buffer.byteLength(document)} bytes, ${blocks.length} block(s)${C.reset}\n`);
+
+if (blocks.length === 0) {
+  console.log('  no signature block — this document is unsigned.');
+  process.exit(1);
 }
 
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--help' || a === '-h') { args.help = true; continue; }
-    if (a === '--json') { args.json = true; continue; }
-    if (a === '--strict') { args.strict = true; continue; }
-    if (a.startsWith('--')) {
-      args[a.slice(2)] = argv[++i];
-    }
-  }
-  return args;
+for (let i = 0; i < blocks.length; i++) {
+  verifyBlock(i);
+  if (i < blocks.length - 1) console.log('');
 }
 
-function loadSecret(secretArg) {
-  if (existsSync(secretArg)) {
-    return readFileSync(secretArg, 'utf8').trim();
-  }
-  return secretArg.trim();
+console.log('');
+if (failures) {
+  console.log(`${C.red}${C.bold}${failures} problem(s).${C.reset}`);
+  process.exit(1);
 }
-
-function parseFieldDeclaration(text) {
-  // Best-effort: extract field IDs + required flag from a mades-sig-fields block
-  const m = text.match(/~~~mades-sig-fields\n([\s\S]*?)\n~~~/);
-  if (!m) return null;
-  const declaration = m[1];
-  const fields = [];
-  // Naive line-walk; supports both flat list and stages structure
-  const lines = declaration.split('\n');
-  let currentField = null;
-  for (const line of lines) {
-    const idMatch = line.match(/^\s*-?\s*id:\s*(\S+)/);
-    if (idMatch) {
-      if (currentField) fields.push(currentField);
-      currentField = { id: idMatch[1], required: false };
-      continue;
-    }
-    const reqMatch = line.match(/^\s*required:\s*(true|false)/);
-    if (reqMatch && currentField) {
-      currentField.required = reqMatch[1] === 'true';
-    }
-  }
-  if (currentField) fields.push(currentField);
-  return fields;
+// NEVER report success over blocks that were not checked.
+//
+// The first version of this printed "All signatures verify" after withholding
+// a verdict on every block — a false green, in a verifier, for a signature
+// specification. It is the most expensive bug this file could carry, and it
+// took one run against a real document to produce it.
+if (verified === 0) {
+  console.log(`${C.yellow}${C.bold}No verdict.${C.reset} ${withheld} block(s) could not be checked; nothing here says the document is sound.`);
+  process.exit(1);
 }
+const rest = withheld ? ` ${withheld} block(s) withheld.` : '';
+console.log(`${C.green}${C.bold}${verified} signature(s) verify.${C.reset}${rest}`);
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+// ---------------------------------------------------------------------------
 
-  if (args.help || !args.input) {
-    usage();
-    process.exit(args.help ? 0 : 3);
+function verifyBlock(index) {
+  const d = signingInputForBlock(document, index);
+  console.log(`${C.bold}signature ${index + 1}${C.reset}`);
+
+  // §a.5 — a block we cannot fully read is `unsupported`, never `invalid`.
+  // "We do not know" and "this was tampered with" are different answers, and
+  // reporting the second when you mean the first is its own kind of lie.
+  if (d.unparsed.length) {
+    withheld++;
+    note(`unsupported — ${d.unparsed.length} line(s) could not be parsed`);
+    for (const l of d.unparsed.slice(0, 3)) info('', JSON.stringify(l));
+    info('meaning', 'no verdict is offered on this block');
+    return;
+  }
+  if (!d.signature) {
+    withheld++;
+    // Most often this is not a signature at all but prose that quotes the
+    // opening marker. See the limitation noted in mades-canon.mjs.
+    note('no signature value in this block — it may be prose describing one');
+    return;
   }
 
-  if (!existsSync(args.input)) {
-    console.error(`Error: input file not found: ${args.input}`);
-    process.exit(3);
-  }
+  info('signer', d.fields.signer ?? '(absent)');
+  info('signed-at', d.fields['signed-at'] ?? '(absent)');
+  info('commitment', d.fields.commitment ?? '(absent)');
 
-  const original = readFileSync(args.input, 'utf8');
-  const parsed = parseDocument(original);
+  // §a.11 — who signed, and what signed.
+  const kind = d.fields['signer-kind'];
+  if (d.rules >= 5 && !kind) bad('signer-kind is required from block version 5');
+  else if (kind) info('signer-kind', kind + (d.fields.automation ? ` (${d.fields.automation})` : ''));
+  else info('signer-kind', C.dim + 'unspecified (pre-v5 block)' + C.reset);
 
-  if (parsed.blocks.length === 0) {
-    const out = { ok: false, reason: 'no signatures found', blocks: [] };
-    console.log(args.json ? JSON.stringify(out, null, 2) : 'No signatures found.');
-    process.exit(1);
-  }
+  // --- the signature itself ------------------------------------------------
 
-  const results = [];
-  let allValid = true;
+  // Two ways to reach a public key: the certificate chain inside the document,
+  // or a key the reader already holds (§c.7, the `key-id` path).
+  const chain = toList(d.fields['certificate-chain']);
+  let leaf = null;
+  let publicKey = null;
 
-  for (const blk of parsed.blocks) {
-    const algo = ALGORITHMS[blk.parsed.algorithm];
-    if (!algo) {
-      results.push({
-        signer: blk.parsed.signer,
-        algorithm: blk.parsed.algorithm,
-        valid: false,
-        error: `algorithm '${blk.parsed.algorithm}' not supported by reference impl`,
-      });
-      allValid = false;
-      continue;
+  if (chain.length) {
+    try {
+      leaf = new X509Certificate(Buffer.from(chain[0], 'base64'));
+      publicKey = leaf.publicKey;
+    } catch (err) {
+      bad(`the first certificate could not be read: ${err.message}`);
+      return;
     }
-
-    if (blk.parsed.algorithm === 'hmac-sha256') {
-      if (!args.secret) {
-        results.push({
-          signer: blk.parsed.signer,
-          algorithm: 'hmac-sha256',
-          valid: false,
-          error: '--secret required for hmac-sha256 verification',
-        });
-        allValid = false;
-        continue;
-      }
-      const secret = loadSecret(args.secret);
-      const valid = await algo.verify(blk.priorContent, blk.parsed.signature, { secret });
-      results.push({
-        signer: blk.parsed.signer,
-        algorithm: 'hmac-sha256',
-        signedAt: blk.parsed['signed-at'],
-        field: blk.parsed.field || null,
-        valid,
-      });
-      if (!valid) allValid = false;
-    } else {
-      // Non-HMAC: not yet implemented in reference (v0.4+)
-      results.push({
-        signer: blk.parsed.signer,
-        algorithm: blk.parsed.algorithm,
-        valid: null,
-        error: 'reference impl supports only hmac-sha256 in v0.3',
-      });
-    }
-  }
-
-  // Field-completeness check
-  const declaredFields = parseFieldDeclaration(original);
-  let unsignedRequired = [];
-  if (declaredFields) {
-    const signedFieldIds = new Set(
-      parsed.blocks.map((b) => b.parsed.field).filter(Boolean),
-    );
-    unsignedRequired = declaredFields
-      .filter((f) => f.required && !signedFieldIds.has(f.id))
-      .map((f) => f.id);
-  }
-
-  // Exit code
-  let exitCode = 0;
-  if (!allValid) exitCode = 1;
-  else if (args.strict && unsignedRequired.length > 0) exitCode = 2;
-
-  // Output
-  if (args.json) {
-    console.log(JSON.stringify({
-      ok: exitCode === 0,
-      signatureCount: parsed.blocks.length,
-      results,
-      declaredFields: declaredFields || null,
-      unsignedRequiredFields: unsignedRequired,
-    }, null, 2));
+  } else if (publicKeyPem) {
+    publicKey = createPublicKey(publicKeyPem);
+    info('key', `supplied by the reader${d.fields['key-id'] ? ` for ${d.fields['key-id']}` : ''}`);
   } else {
-    console.log(`Verified ${parsed.blocks.length} signature(s) in ${args.input}:`);
-    for (const r of results) {
-      const icon = r.valid === true ? '✓' : r.valid === false ? '✗' : '?';
-      const fieldPart = r.field ? ` [field: ${r.field}]` : '';
-      const errPart = r.error ? ` (${r.error})` : '';
-      console.log(`  ${icon} ${r.signer} — ${r.algorithm}${fieldPart}${errPart}`);
+    withheld++;
+    note('no certificate in the document and no key supplied — no verdict offered');
+    info('how', 'pass --key <public.pem> for a document signed on the raw-key path (§c.7)');
+    return;
+  }
+
+  const algorithm = d.fields.algorithm;
+  if (!(algorithm in ALGORITHMS)) {
+    note(`unsupported algorithm \`${algorithm}\` — no verdict offered`);
+    return;
+  }
+
+  const signature = Buffer.from(d.signature, 'base64');
+  const input = Buffer.from(d.signingInput, 'utf8');
+  const digest = ALGORITHMS[algorithm];
+
+  // Ed25519 signs the message itself; everything else signs a digest of it.
+  const check = (bytes, sig) => digest === null
+    ? verifyRaw(null, bytes, publicKey, sig)
+    : (() => { const v = createVerify(digest); v.update(bytes); return v.verify(publicKey, sig); })();
+
+  const valid = check(input, signature);
+
+  if (valid) { verified++; ok(`${C.bold}SIGNATURE VERIFIES${C.reset} against ${leaf ? 'the certificate in the file' : 'the supplied key'}`); }
+  else { bad('signature does NOT verify'); return; }
+
+  // The other half. A verifier that always returns true passes the check above.
+  const tampered = (document[0] === 'x' ? 'y' : 'x') + document.slice(1);
+  const t = signingInputForBlock(tampered, index);
+  const tv = check(Buffer.from(t.signingInput, 'utf8'), Buffer.from(t.signature, 'base64'));
+  if (tv) bad('a modified document still verifies — the check above proves nothing');
+  else ok('a single changed character breaks it');
+
+  // --- who vouches for the name --------------------------------------------
+
+  if (!leaf) {
+    // The raw-key path. The signature is sound and nobody vouched for the name
+    // attached to it — which is a different statement from "invalid", and the
+    // reader is entitled to the difference.
+    note('raw-key path — no certificate, so no issuer vouches for this name');
+  } else {
+    info('subject', leaf.subject.replace(/\n/g, ', '));
+    info('issuer', leaf.issuer.replace(/\n/g, ', '));
+
+    // §a.11 — the field and the certificate must agree. Without this, anyone
+    // holding any valid certificate can sign a block naming somebody else, and
+    // the reader sees that name beside a valid verdict.
+    if (d.fields.signer && !certNames(leaf).includes(String(d.fields.signer).toLowerCase())) {
+      bad(`the \`signer\` field (${d.fields.signer}) is not supported by the certificate`);
+      info('meaning', 'the signature is valid; the claim about who made it is not');
+    } else if (d.fields.signer) {
+      ok('the `signer` field is supported by the certificate');
     }
-    if (declaredFields) {
-      console.log(`\nField-completeness: ${unsignedRequired.length === 0 ? 'COMPLETE' : 'INCOMPLETE'}`);
-      if (unsignedRequired.length > 0) {
-        console.log(`  Unsigned required fields: ${unsignedRequired.join(', ')}`);
-      }
+
+    info('cert validity', `${leaf.validFrom} … ${leaf.validTo}`);
+    if (new Date(leaf.validTo) < new Date()) {
+      info('', C.dim + 'expired — normal for MAdES, the timestamp carries it (§c.3)' + C.reset);
     }
   }
 
-  process.exit(exitCode);
+  if (leaf && anchorPem) {
+    // Wording matters here. "Trust anchor not recognised" is correct;
+    // "untrusted signature" misleads a reader into treating a valid signature
+    // as a forged one (§d).
+    const anchored = chain.some((c) => {
+      try { return new X509Certificate(Buffer.from(c, 'base64')).verify(new X509Certificate(anchorPem).publicKey); }
+      catch { return false; }
+    });
+    if (anchored) ok('the chain is anchored in the supplied root');
+    else note('trust anchor not recognised — supply the issuer\'s root to complete verification');
+  } else {
+    note('no trust anchor supplied — pass --anchor <root.pem> to check the chain');
+  }
+
+  // --- the timestamp -------------------------------------------------------
+
+  if (d.fields.timestamp) {
+    // Parsing RFC 3161 is out of scope for a reference implementation; what
+    // matters here is that the field is present and that its absence is not
+    // silently equivalent to its presence.
+    info('timestamp', `present (${Buffer.from(d.fields.timestamp, 'base64').length} bytes, RFC 3161)`);
+    info('', C.dim + 'stated, not verified here — see SPEC.md §c.5' + C.reset);
+  } else {
+    note('no timestamp — this signature cannot outlive its certificate');
+  }
+
+  // --- §d level 4: what this reader does not understand --------------------
+
+  const unknown = Object.keys(d.fields).filter((k) => !KNOWN_FIELDS.has(k));
+  if (unknown.length) {
+    console.log(`  ${C.bold}signed fields this reader does not implement${C.reset}`);
+    for (const k of unknown) {
+      const namespaced = k.includes('.');
+      info(k, `${render(d.fields[k])} ${C.dim}(meaning not known to this reader)${C.reset}`);
+      if (!namespaced) {
+        bad(`\`${k}\` carries no vendor namespace — unsupported (§a.1)`);
+      }
+    }
+  }
 }
 
-main().catch((err) => {
-  console.error('Error:', err.message);
-  process.exit(3);
-});
+// ---------------------------------------------------------------------------
+
+function toList(v) {
+  if (!v) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+function certNames(cert) {
+  const out = [];
+  const cn = /CN=([^,\n]+)/.exec(cert.subject);
+  if (cn) out.push(cn[1].trim().toLowerCase());
+  for (const m of (cert.subjectAltName ?? '').matchAll(/email:([^,\s]+)/gi)) {
+    out.push(m[1].toLowerCase());
+  }
+  return out;
+}
+
+function render(v) {
+  if (Array.isArray(v)) return `[${v.length} item(s)]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).join(', ')}}`;
+  return String(v);
+}

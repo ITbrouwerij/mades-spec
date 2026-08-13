@@ -1,6 +1,6 @@
 {
   "name": "@itbrouwerij/mades-spec",
-  "version": "0.3.0",
+  "version": "1.3.0",
   "description": "MAdES — Markdown Advanced Electronic Signatures: spec + reference implementation",
   "type": "module",
   "bin": {
@@ -8,13 +8,12 @@
     "mades-verify": "./reference/mades-verify.mjs"
   },
   "scripts": {
-    "test": "node --test reference/test/canonicalisation.test.mjs"
+    "test": "node --test reference/test/mades.test.mjs"
   },
   "keywords": [
     "markdown",
     "signature",
     "cryptography",
-    "hmac",
     "ed25519",
     "ades",
     "eidas",

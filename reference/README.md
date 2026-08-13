@@ -1,86 +1,91 @@
 # MAdES reference implementation (Node.js)
 
-Reference scripts that demonstrate a working MAdES sign + verify cycle. Zero dependencies (Node.js built-ins only). Targets Node 20+ (current LTS line).
+A working sign + verify cycle for block version 5. Zero dependencies — Node
+built-ins only. Node 20+.
 
-## Status
-
-- ✅ **`hmac-sha256`** — fully implemented (sign + verify, CLI + library)
-- ⏳ **`ed25519`** — TODO v0.4 (using `node:crypto` `sign()` / `verify()` with PKCS#8 keys)
-- ⏳ **`ecdsa-p256`** — TODO v0.4
-- ⏳ **`rsa-pss-sha256`** — TODO v0.4
-- ⏳ **Key-id resolution** — TODO v0.4 (`.well-known/mades-keys`, DID URLs)
-
-## Files
-
-| File | Purpose |
-|---|---|
-| `mades-canon.mjs` | Canonicalisation + sig-block parsing + algorithm registry. Pure functions, zero deps. Importable as a library. |
-| `mades-sign.mjs` | CLI to append a signature to a Markdown file |
-| `mades-verify.mjs` | CLI to verify all signatures in a Markdown file |
-| `test/canonicalisation.test.mjs` | Tests using `node --test`. Covers canonicalisation edge cases + sign/verify round-trips. |
-
-## Quickstart
-
-```bash
-# Generate a 256-bit secret (or use any hex string of equivalent entropy)
-SECRET=$(openssl rand -hex 32)
-echo "# My Document" > doc.md
-echo "Some content here." >> doc.md
-
-# Sign
-node reference/mades-sign.mjs \
-  --input doc.md \
-  --signer alice@example.com \
-  --secret $SECRET
-
-# Inspect — the file now has a ~~~mades-sig block appended
-cat doc.md
-
-# Verify
-node reference/mades-verify.mjs \
-  --input doc.md \
-  --secret $SECRET
-# → ✓ alice@example.com — hmac-sha256
+```
+mades-canon.mjs    block location, parsing, canonicalisation, signing input
+mades-verify.mjs   verify a document using nothing but the document
+mades-sign.mjs     append a signature, signing with a local key
+test/              19 tests, including one against a real signed document
 ```
 
-## Library use (programmatic)
+## Verify
 
-```javascript
-import { canonicalise, parseDocument, ALGORITHMS } from './reference/mades-canon.mjs';
-import { readFileSync } from 'node:fs';
-
-const doc = readFileSync('doc.md', 'utf8');
-const parsed = parseDocument(doc);
-
-for (const block of parsed.blocks) {
-  const algo = ALGORITHMS[block.parsed.algorithm];
-  const valid = await algo.verify(
-    block.priorContent,
-    block.parsed.signature,
-    { secret: 'your-hex-secret-here' }
-  );
-  console.log(`${block.parsed.signer}: ${valid ? 'OK' : 'INVALID'}`);
-}
+```sh
+node mades-verify.mjs ../examples/05-a-real-signed-document.md
 ```
 
-## Running tests
+That file is signed by a real service, with a real certificate and an RFC 3161
+timestamp. It is the acceptance test for everything here: an implementation
+checked only against its own output proves that its encoder and its decoder
+agree with each other, which is not the property a recipient needs.
 
-```bash
-node --test reference/test/
+```sh
+node mades-verify.mjs doc.md --anchor issuer-root.pem   # check the chain
+node mades-verify.mjs doc.md --key signer-public.pem    # raw-key path (§c.7)
 ```
 
-## Acknowledged limitations
+**It never claims more than it checked.** A block it cannot parse, an algorithm
+it does not implement, a document with no key available — each ends in *"no
+verdict"* and a non-zero exit, never in a green tick. A false failure on a
+verification page costs exactly what a false success costs, and both were
+produced during this specification's development.
 
-This is **reference code**, not a production-hardened library. Known shortcuts:
+## Sign
 
-- `parseSimpleYaml` is a flat-key-value parser, not a real YAML parser. It handles sig-block bodies fine but won't parse general YAML (e.g. nested maps, multi-line strings). For production use: `import yaml from 'js-yaml'` (or equivalent) and replace `parseSimpleYaml`.
-- `mades-sign` field-validation is best-effort (regex checks against the declaration block). Full stage-dependency-graph evaluation is left to a workflow-engine implementation.
-- No key-rotation, no expired-key handling, no certificate-chain validation.
-- HMAC only — no public-key crypto in v0.3.
-- The reference impl is not formally security-audited.
+```sh
+node mades-sign.mjs keygen > signer.key
+node mades-sign.mjs sign doc.md --key signer.key \
+     --signer alice@example.com --kind human --commitment approval
+```
 
-For production: use this as a starting point, replace the YAML parser, add the algorithms you need, build your own key-management.
+`--kind` has **no default**. Defaulting it to `human` would give away the whole
+of §a.11 in one line: every caller who forgets the flag would produce a document
+claiming a person signed it, and forgetting is the most common way this goes
+wrong.
 
-## License
+The signer reads its own output back before reporting success. A signer that
+does not is a signer that ships broken documents and hears about it from a
+recipient.
 
-MIT — see [`../LICENSE-CODE`](../LICENSE-CODE).
+## What this is not
+
+**It signs with a raw key, not a certificate.** Issuing short-lived certificates
+(§c.3) needs a certificate authority, an identity check and a confirmation
+channel the signer controls — a service, not a script. Documents signed here
+carry `key-id` rather than `certificate-chain`, and a verifier reports their
+trust anchor as unrecognised, which is the honest answer for a key nobody
+vouched for.
+
+The half that *does* belong here is the half every implementation must agree on
+byte-for-byte: how the signing input is built, how blocks are parsed, and what a
+verifier is allowed to claim.
+
+**Timestamps are read, not verified.** The field is reported with its size; its
+contents are not parsed. Verifying RFC 3161 properly is a library, and pretending
+otherwise would be the same mistake as the false green above.
+
+## Known limitation
+
+Block location is a byte scan for the opening marker, so **a document that
+quotes it — a tutorial, an issue, this specification — produces a phantom
+block**. The verifier reports *"may be prose describing one"* rather than
+claiming the document is modified, but the underlying gap is real: a
+specification cannot presently be signed with the thing it specifies.
+
+The proposed fix is in SPEC.md under open decisions: recognise the marker only
+at the start of a line, and skip fenced code regions. There is a test pinning
+today's behaviour, and it flips when the fix lands.
+
+## Tests
+
+```sh
+npm test
+```
+
+19 tests. The first suite verifies the real signed document, checks that a single
+changed character breaks it, and asserts the file still has LF endings — that
+last one is a `.gitattributes` test in disguise, and the reason CI runs on
+Windows. Without `-text` on that file, git rewrites it on checkout there and the
+signature fails for everyone who cloned the repository.

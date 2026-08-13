@@ -1,170 +1,128 @@
 #!/usr/bin/env node
 /**
- * mades-sign — append a MAdES signature block to a Markdown file.
+ * MAdES signer — appends a signature block to a Markdown document.
  *
- * Usage:
- *   mades-sign --input doc.md --signer alice@example.com --secret <hex> [options]
+ *   node mades-sign.mjs keygen > signer.key
+ *   node mades-sign.mjs sign doc.md --key signer.key \
+ *        --signer alice@example.com --kind human --commitment approval
  *
- * Required:
- *   --input <file>          Markdown file to sign (read + write in place unless --output given)
- *   --signer <id>           Signer identifier (typically email or DID)
- *   --secret <hex|file>     HMAC secret as hex string OR path to file containing it
+ * Zero dependencies. Node built-ins only.
  *
- * Optional:
- *   --algorithm <alg>       Signature algorithm. Default: hmac-sha256
- *                           (v0.3 reference impl: only hmac-sha256 supported)
- *   --field <id>            Reference a field from a mades-sig-fields declaration
- *   --output <file>         Write to a different file instead of overwriting input
- *   --help                  Show this message
+ * **This signs with a raw key, not a certificate.** Issuing short-lived
+ * certificates (§c.3) needs a CA, an identity check and a confirmation channel
+ * — a service, not a script, and none of it belongs in a reference
+ * implementation. What this demonstrates is the half that every implementation
+ * must agree on byte-for-byte: how the signing input is built and how the block
+ * is written.
  *
- * Exit codes:
- *   0 = signed successfully
- *   1 = error (validation, IO, crypto)
- *   2 = field-validation error (e.g., field already signed in single-occupancy stage)
+ * A document signed this way carries `key-id` instead of `certificate-chain`
+ * (§c.7). It verifies, and it reports its trust anchor as unrecognised, which
+ * is the honest answer for a key nobody vouched for.
  */
+import { generateKeyPairSync, createPrivateKey, sign as signRaw, createSign } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { canonicalise, parseDocument, ALGORITHMS, buildHeaderComment } from './mades-canon.mjs';
+import { findBlocks, canonicalize, serializeBlock, signingInputForBlock } from './mades-canon.mjs';
 
-function usage() {
-  console.error(`mades-sign — append a MAdES signature to a Markdown file.
+const BLOCK_VERSION = 5;
 
-Usage:
-  mades-sign --input doc.md --signer alice@example.com --secret <hex|file> [options]
-
-Required:
-  --input <file>       Markdown file to sign
-  --signer <id>        Signer identifier (email, DID, etc.)
-  --secret <hex|file>  HMAC secret as hex string OR path to file containing it
-
-Optional:
-  --algorithm <alg>    Signature algorithm (default: hmac-sha256)
-  --field <id>         Reference a field declared in a mades-sig-fields block
-  --output <file>      Write to different file (default: overwrite --input)
-  --help               Show this message
-
-Exit codes: 0=ok, 1=error, 2=field validation error
-`);
+const command = process.argv[2];
+if (command === 'keygen') keygen();
+else if (command === 'sign') sign();
+else {
+  console.error('usage:\n  mades-sign.mjs keygen > signer.key\n  mades-sign.mjs sign <file.md> --key <key.pem> --signer <email> [options]');
+  process.exit(2);
 }
 
-function parseArgs(argv) {
-  const args = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--help' || a === '-h') { args.help = true; continue; }
-    if (a.startsWith('--')) {
-      args[a.slice(2)] = argv[++i];
-    }
-  }
-  return args;
+// ---------------------------------------------------------------------------
+
+function keygen() {
+  const { privateKey } = generateKeyPairSync('ed25519');
+  process.stdout.write(privateKey.export({ type: 'pkcs8', format: 'pem' }));
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+function sign() {
+  const file = process.argv[3];
+  if (!file) die('which file?');
 
-  if (args.help || !args.input || !args.signer || !args.secret) {
-    usage();
-    process.exit(args.help ? 0 : 1);
+  const key = createPrivateKey(readFileSync(flag('--key') ?? die('--key <file> is required'), 'utf8'));
+  const signer = flag('--signer') ?? die('--signer <email> is required');
+
+  // NO DEFAULT FOR `signer-kind`, and that is the point (§a.11).
+  //
+  // Defaulting to `human` would give the whole rule away in one line: every
+  // caller who forgets the flag produces a document claiming a person signed
+  // it. Forgetting is the most common way this goes wrong, so forgetting has
+  // to be loud.
+  const kind = flag('--kind');
+  if (!kind) die('--kind <human|automated> is required from block version 5');
+  if (!['human', 'automated'].includes(kind)) die('--kind must be `human` or `automated`');
+
+  const document = readFileSync(file, 'utf8');
+  const blockIndex = findBlocks(document).length; // append after any existing blocks
+
+  const fields = {
+    version: BLOCK_VERSION,
+    algorithm: algorithmFor(key),
+    signer,
+    'signer-kind': kind,
+    commitment: flag('--commitment') ?? 'approval',
+    'signed-at': flag('--at') ?? new Date().toISOString(),
+  };
+  if (flag('--automation')) fields.automation = flag('--automation');
+  if (flag('--lang')) fields.lang = flag('--lang');
+  if (flag('--key-id')) fields['key-id'] = flag('--key-id');
+
+  const comment = `# ✓ Signed by ${signer} — ${fields.commitment} — ${kind} — ${fields['signed-at'].slice(0, 10)}`;
+
+  // Build the signing input exactly as a verifier will rebuild it: content up
+  // to where this block will sit, then the comment lines, then the fields
+  // sorted by key. Producing it any other way is how a signer and a verifier
+  // come to disagree about a document neither of them changed.
+  const draft = document.replace(/\n*$/, '\n\n') + serializeBlock({ ...fields, signature: 'x' }, [comment]) + '\n';
+  const { signingInput } = signingInputForBlock(draft, blockIndex);
+
+  fields.signature = produce(key, signingInput);
+
+  const out = document.replace(/\n*$/, '\n\n') + serializeBlock(fields, [comment]) + '\n';
+  writeFileSync(file, out);
+
+  // Verify what we just wrote, from the file, before claiming success. A signer
+  // that does not read back its own output is a signer that ships broken
+  // documents and finds out from a recipient.
+  const check = signingInputForBlock(readFileSync(file, 'utf8'), blockIndex);
+  if (check.signingInput !== signingInput) {
+    die('the block that was written does not rebuild to what was signed — refusing to claim success');
   }
 
-  const algorithm = args.algorithm || 'hmac-sha256';
-  if (!ALGORITHMS[algorithm]) {
-    console.error(`Error: algorithm '${algorithm}' not supported by reference impl.`);
-    console.error(`Supported: ${Object.keys(ALGORITHMS).join(', ')}`);
-    process.exit(1);
-  }
-
-  // Resolve secret: literal hex string OR file path
-  let secret = args.secret;
-  if (existsSync(secret)) {
-    secret = readFileSync(secret, 'utf8').trim();
-  }
-  if (!/^[0-9a-fA-F]+$/.test(secret)) {
-    console.error('Error: --secret must be hex (or a file containing hex)');
-    process.exit(1);
-  }
-
-  if (!existsSync(args.input)) {
-    console.error(`Error: input file not found: ${args.input}`);
-    process.exit(1);
-  }
-
-  const original = readFileSync(args.input, 'utf8');
-  const parsed = parseDocument(original);
-
-  // ── Field validation against mades-sig-fields if present ──────────────
-  // (Reference impl: best-effort. We look for a mades-sig-fields block in
-  // the prefix and check if the requested field is declared + still
-  // single-occupancy. Full stage-dependency-graph validation is left for
-  // a richer implementation.)
-  if (args.field) {
-    const fieldsPattern = /~~~mades-sig-fields\n([\s\S]*?)\n~~~/;
-    const m = original.match(fieldsPattern);
-    if (m) {
-      const declaration = m[1];
-      // Naive: check field id appears in declaration
-      const fieldRegex = new RegExp(`\\bid:\\s*${args.field}\\b`);
-      if (!fieldRegex.test(declaration)) {
-        console.error(`Error: field '${args.field}' not declared in mades-sig-fields block`);
-        process.exit(2);
-      }
-      // Naive: check no existing sig-block already references this field
-      for (const blk of parsed.blocks) {
-        if (blk.parsed.field === args.field) {
-          console.error(`Error: field '${args.field}' already signed in this document`);
-          process.exit(2);
-        }
-      }
-    }
-  }
-
-  const signedAt = new Date().toISOString();
-  const algo = ALGORITHMS[algorithm];
-
-  // ── Build a "fake" sig-block-less document to compute the signature over ──
-  // The signature covers everything before the new block's opening fence.
-  // We append the new block at the end, so the signed content is the
-  // canonicalised current document.
-  const canonical = canonicalise(original);
-  const signature = await algo.sign(canonical, { secret });
-
-  // ── Compose the new sig-block ─────────────────────────────────────────
-  const headerComment = buildHeaderComment({
-    signer: args.signer,
-    signedAt,
-    algorithm,
-    field: args.field,
-  });
-
-  const yamlLines = [
-    headerComment,
-    `version: 1`,
-    `algorithm: ${algorithm}`,
-    `signer: ${args.signer}`,
-    `signed-at: ${signedAt}`,
-  ];
-  if (args.field) yamlLines.push(`field: ${args.field}`);
-  yamlLines.push(`signature: ${signature}`);
-
-  const newBlock = `~~~mades-sig\n${yamlLines.join('\n')}\n~~~\n`;
-
-  // ── Write result ──────────────────────────────────────────────────────
-  // Append new block (with one blank line separator if needed)
-  const sep = canonical.endsWith('\n') ? '\n' : '\n\n';
-  const output = canonical + sep + newBlock;
-
-  const outPath = args.output || args.input;
-  writeFileSync(outPath, output, 'utf8');
-
-  console.log(`Signed: ${outPath}`);
-  console.log(`  algorithm: ${algorithm}`);
-  console.log(`  signer:    ${args.signer}`);
-  console.log(`  signed-at: ${signedAt}`);
-  if (args.field) console.log(`  field:     ${args.field}`);
-  console.log(`  signature: ${signature.slice(0, 16)}... (${signature.length} chars)`);
+  console.error(`signed ${file} — block ${blockIndex + 1}, ${fields.algorithm}, ${kind}`);
 }
 
-main().catch((err) => {
-  console.error('Error:', err.message);
+// ---------------------------------------------------------------------------
+
+function algorithmFor(key) {
+  const t = key.asymmetricKeyType;
+  if (t === 'ed25519') return 'ed25519';
+  if (t === 'ec') return 'ecdsa-p256';
+  if (t === 'rsa') return 'rsa-sha256';
+  return die(`unsupported key type: ${t}`);
+}
+
+function produce(key, input) {
+  if (key.asymmetricKeyType === 'ed25519') {
+    return signRaw(null, Buffer.from(input, 'utf8'), key).toString('base64');
+  }
+  const s = createSign('sha256');
+  s.update(input);
+  return s.sign(key).toString('base64');
+}
+
+function flag(name) {
+  const i = process.argv.indexOf(name);
+  return i === -1 ? undefined : process.argv[i + 1];
+}
+
+function die(message) {
+  console.error(`mades-sign: ${message}`);
   process.exit(1);
-});
+}
