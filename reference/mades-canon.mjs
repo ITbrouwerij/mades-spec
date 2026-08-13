@@ -93,15 +93,21 @@ export function findBlocks(content) {
     const lineStart = offset;
     offset += line.length + 1; // the '\n' we split on
 
-    // Fence tracking. A fence opens with three or more backticks or tildes and
-    // closes with at least as many of the SAME character and nothing else on
-    // the line — CommonMark's rule, which is what a reader's renderer uses.
-    const f = /^(`{3,}|~{3,})/.exec(line);
+    // Fence tracking, following CommonMark so that what we skip is exactly what
+    // a reader sees rendered as code: three or more backticks or tildes, up to
+    // three spaces of indentation, closing with at least as many of the SAME
+    // character and nothing else on the line.
+    //
+    // The indentation allowance is not pedantry. Without it, a fence indented by
+    // two spaces is invisible to this scanner while still rendering as code, and
+    // a marker at column 0 inside it becomes a phantom block again — the exact
+    // hole these rules close, reopened in a corner.
+    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line);
     if (f) {
       const ch = f[1][0];
       const len = f[1].length;
       if (!fence) fence = { ch, len };
-      else if (ch === fence.ch && len >= fence.len && line.slice(len).trim() === '') fence = null;
+      else if (ch === fence.ch && len >= fence.len && line.slice(f[0].length).trim() === '') fence = null;
       continue;
     }
     if (fence) continue;

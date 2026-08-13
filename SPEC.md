@@ -159,9 +159,17 @@ belongs.
 > **NORMATIVE (v1.4) — where a block may be found.** An implementation MUST
 > recognise the opening marker **only at the start of a line**, and MUST NOT
 > recognise it **inside a fenced code block**. A fence opens with three or more
-> backticks or tildes at the start of a line and closes with at least as many of
-> the same character; this is CommonMark's rule, so what a verifier skips is
-> exactly what a reader sees rendered as code.
+> backticks or tildes, indented by at most three spaces, and closes with at
+> least as many of the **same** character and nothing else on the line. This is
+> CommonMark's rule, so what a verifier skips is exactly what a reader sees
+> rendered as code — and both halves matter. Close a fence on any marker and a
+> ` ``` ` inside a `~~~~` region ends it early; ignore the indentation
+> allowance and a fence indented by two spaces stays invisible to the scanner
+> while still rendering as code. Either way the hole reopens in a corner.
+>
+> The marker itself is held to the stricter rule: **column zero, no
+> indentation.** An indented marker is an indented code block, which renders as
+> code too.
 >
 > Both rules are byte-level and require no Markdown parser. That is deliberate:
 > an implementation that must *understand* the document to find the signature is

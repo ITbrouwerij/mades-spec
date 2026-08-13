@@ -235,6 +235,14 @@ describe('locating blocks (§a.1)', () => {
     assert.equal(signingInputForBlock(doc, 0).fields.signer, 'alice@example.com');
   });
 
+  it('recognises a fence indented up to three spaces, as CommonMark does', () => {
+    // The corner where the hole reopens. An indented fence still renders as
+    // code; a scanner that misses it, and a marker at column 0 inside it, and
+    // the phantom block is back.
+    const doc = ['text', '', '  ```', '<!-- mades-sig', 'version: 5', '-->', '  ```', ''].join('\n');
+    assert.equal(findBlocks(doc).length, 0);
+  });
+
   it('closes a fence only with the same character, and at least as many', () => {
     // CommonMark's rule. Getting it wrong reopens the hole: a ``` inside a
     // ~~~~ region would end the region early and expose the example inside it.
