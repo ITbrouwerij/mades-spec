@@ -28,7 +28,13 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Run tests
-        # Explicit file path (not directory) — Node's --test directory-mode
-        # behaviour varies between versions and platforms; explicit files
-        # work consistently on Node 18/20/22 across Linux/macOS/Windows.
-        run: node --test reference/test/canonicalisation.test.mjs
+        # `npm test`, so the set of tests is defined in ONE place. This step
+        # used to name a test file directly, and when that file was renamed the
+        # workflow kept pointing at it — nine green-looking jobs turned into
+        # nine failures that said nothing about the code.
+        #
+        # The script itself still names an explicit file rather than a
+        # directory: Node's `--test <dir>` behaviour varies between versions and
+        # platforms, and on Node 23 it resolves the directory as a module and
+        # fails outright.
+        run: npm test
