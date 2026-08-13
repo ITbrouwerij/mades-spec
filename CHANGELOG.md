@@ -9,7 +9,83 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
-## v0.3 — 2026-04-28 (current draft)
+## v1.3 — 2026-08-14
+
+First publication since v0.3. The specification moved a long way in between and
+those drafts were never published, so this entry describes the whole distance
+rather than pretending there were releases.
+
+**BREAKING — the signature block is an HTML comment, not a fenced block.**
+
+```
+was   ~~~mades-sig … ~~~
+is    <!-- mades-sig … -->
+```
+
+A fence *renders*; that is its definition. Every reader who opened a signed file
+in an ordinary viewer therefore saw kilobytes of base64 where the document
+should have been. An HTML comment is hidden by CommonMark renderers, stripped by
+GitHub, hidden in Obsidian's reading view and dropped by Pandoc — and fully
+present in the source. Invisible in view, present in code.
+
+One normative consequence: the block body must not contain `--`, because an HTML
+comment ends at the first one. A block containing it is truncated and the
+document reads as *unsigned* rather than invalid — silent and total, so
+implementations must check before emitting.
+
+**Block versions 2 through 5.** The block carries its own `version`, and a block
+is read under the rules of the version it declares. Existing documents keep
+verifying; a reader never applies newer rules to an older block.
+
+- **v4 — parsing is total, and every comment line is signed.** Before this, a
+  bare line inside the block was silently appended to the previous field or
+  dropped, and a second comment line fell outside the signing input entirely.
+  Both were measured on the reference implementation. The consequence was not
+  academic: a line reading `# WARNING: this contract has been declared void`
+  could be added to a signed block without breaking the signature — and that
+  block is exactly what a reader sees in a plain text editor.
+- **v5 — `signer-kind`.** Mandatory, closed and binary (`human` | `automated`),
+  inside the signed fields, and mirrored by the certificate so a verifier can
+  hold the two against each other. Markdown is where humans and machines take
+  turns; this is the question MAdES can answer and PAdES never had to ask.
+
+**Cryptography grew up.** Personal signatures are asymmetric, always. HMAC is no
+longer a baseline for signatures — it survives as *machine attestation*, which
+is a different claim and is named differently. Added: short-lived certificates
+with the timestamp as what makes a signature outlive its key, trust anchoring,
+container formats, and key distribution.
+
+**New fields.** `appearance`, `lang`, `represents`, `revision`/`supersedes`,
+`format`, `key-id`, `certificate-chain`, `timestamp`, `signer-kind`,
+`automation`.
+
+**Vendor extensions are namespaced, and the `x-` prefix is gone.**
+
+```
+was   x-vecto-void: true
+is    build.vecto.void: true
+```
+
+A vendor field carries a reverse-DNS namespace the vendor demonstrably controls.
+No registry and no institution: the party that controls the domain controls the
+namespace. A field whose name carries no recognisable namespace is
+`unsupported`. [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648.txt) (BCP 178)
+recommends against the `X-` convention and forbids stipulating that such a
+prefix means "unstandardised" — unstandardised parameters become de facto
+standards anyway, and the deployed world then carries both spellings forever.
+
+**A verifier must show signed fields it does not understand** (§d, Level 4).
+With the namespace, and without inventing a meaning. This is the mirror image of
+the gap v4 closed: there a signed field could disappear, here it could be
+faithfully preserved and never read. Measured on two independent
+implementations, both of which preserved unknown fields correctly and showed
+none of them.
+
+Both of the last two were raised by the Vecto Sign implementation.
+
+---
+
+## v0.3 — 2026-04-28
 
 **Added — staged workflow support in `mades-sig-fields`:**
 

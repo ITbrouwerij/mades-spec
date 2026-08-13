@@ -1,49 +1,76 @@
 # Example 2: Sequential multi-signature
 
-Two parties sign the same document in sequence. Each signature covers everything before its own opening fence — including the prior signature block. This mirrors how legal contracts work: each subsequent signer endorses the document state including all prior endorsements.
+Two parties sign the same document in turn. **Each signature covers everything
+before its own block — including the previous signature.** That mirrors how
+paper contracts work: the second signer endorses the document *and* the fact
+that the first signer already endorsed it.
 
-This example also upgrades to `ed25519` (MAdES-Advanced profile), which uses public-key cryptography. The `key-id` field tells verifiers where to fetch the public key.
+It is also why pure-parallel signing does not exist in MAdES (§b): the moment
+Alice signs, the bytes Bob would have signed no longer exist.
 
 ---
 
 ## Mutual non-disclosure agreement
 
-This NDA between Acme Corp and Initech protects information exchanged during evaluation of project Cornerstone (initial discussion 2026-04-15). The agreement is in effect from the date of the second signature below until 2028-04-28.
+This NDA between Acme Corp and Initech protects information exchanged during
+evaluation of project Cornerstone. It is in effect from the date of the second
+signature below until 2028-08-14.
 
-Confidential information includes: source code, customer lists, pricing, roadmaps, and technical architecture documents.
+Confidential information includes source code, customer lists, pricing,
+roadmaps, and technical architecture documents.
 
-Either party may share information with employees, contractors, or legal advisors strictly bound by equivalent confidentiality terms.
+Either party may share information with employees, contractors or legal advisors
+strictly bound by equivalent confidentiality terms.
 
 ---
 
-~~~mades-sig
-# ✓ Signed by alice@acme.example — 2026-04-28T09:00:00Z (Ed25519, MAdES-Advanced)
-version: 1
+<!-- mades-sig
+# ✓ Signed by alice@acme.example — creation — human — 2026-08-14
+version: 5
 algorithm: ed25519
 signer: alice@acme.example
-signed-at: 2026-04-28T09:00:00Z
-key-id: https://acme.example/.well-known/mades-keys#alice-2026
-signature: aGVsbG93b3JsZHRoaXNpc25vdGFyZWFsc2lnbmF0dXJlanVzdGFwbGFjZWhvbGRlcg==
-~~~
+signer-kind: human
+commitment: creation
+signed-at: 2026-08-14T09:00:00+02:00
+lang: en
+certificate-chain:
+  - MIIBkTCCATegAwIBAgIUYWxpY2UgYXQgYWNtZSBleGFtcGxlIGNl…
+  - MIIB3jCCAYSgAwIBAgIUZXhhbXBsZSBpc3N1aW5nIGF1dGhvcml0…
+timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxDzANBglghkgBZQMEAgEFAD…
+signature: 3QK8mFvXe2rTgYbNc7wPqLd9ZhJsAiUoEx1vRtBnMk4CfHyWpS…
+-->
 
-~~~mades-sig
-# ✓ Signed by bob@initech.example — 2026-04-28T11:45:00Z (Ed25519, MAdES-Advanced)
-version: 1
+<!-- mades-sig
+# ✓ Signed by bob@initech.example — approval — human — 2026-08-14
+version: 5
 algorithm: ed25519
 signer: bob@initech.example
-signed-at: 2026-04-28T11:45:00Z
-key-id: did:web:initech.example#bob-master
-signature: dGhpc2lzbm90YXJlYWxzaWduYXR1cmVlaXRoZXJqdXN0YW5leGFtcGxlcGxhY2Vob2xkZXI=
-~~~
+signer-kind: human
+commitment: approval
+signed-at: 2026-08-14T16:45:00+02:00
+lang: en
+certificate-chain:
+  - MIIBkTCCATegAwIBAgIUYm9iIGF0IGluaXRlY2ggZXhhbXBsZSBj…
+  - MIIB3jCCAYSgAwIBAgIUZXhhbXBsZSBpc3N1aW5nIGF1dGhvcml0…
+timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxDzANBglghkgBZQMEAgEFAD…
+signature: 7wLpQnZ4dK1sXmEbVc9tRfGh2YjAiPoUx5vNtCkMr8DfHyWqTe…
+-->
 
 ---
 
 ## What this example demonstrates
 
-- **Sequential signing**: Alice signs first; Bob signs second. Bob's signature covers everything above his block — including Alice's full sig-block. This means: tampering with Alice's signature after-the-fact would invalidate Bob's signature.
-- **Walk-back verification**: to verify, start with the *last* sig-block. Strip it, normalise, compute, compare. Then strip the next one, compute, compare. Each signature is individually valid only against the document state that existed when *it* was added.
-- **Public-key cryptography (ed25519)**: no shared secret. Each signer holds their own private key; verifiers fetch the corresponding public key via `key-id`.
-- **Two key-id resolution patterns**:
-  - Alice uses an HTTPS URL pointing to a `.well-known/mades-keys` JSON manifest with a key fragment.
-  - Bob uses a [DID URL](https://www.w3.org/TR/did-core/) (`did:web`) with a key fragment. Verifiers that support DID resolution can use this directly.
-- **Order matters**: the order of `~~~mades-sig` blocks is the order of signing. Reordering is detectable (would break signatures).
+- **Append, never merge.** Bob's block sits after Alice's, and Bob's signing
+  input contains Alice's block verbatim. Remove Alice's signature and Bob's
+  breaks too — which is exactly the property you want from a counter-signature.
+- **Different commitments on the same document.** Alice signed `creation`
+  (*"I produced this and I fix this version"*); Bob signed `approval` (*"I agree
+  to the content"*). Both are signed fields, so neither can be re-read later as
+  the other.
+- **Order is evidence.** The `signed-at` values are within the document, under
+  each signature. A reordering of the blocks would break both.
+- **Verification is per-block.** A verifier reports each signature separately.
+  One block failing does not make the others invalid — it makes *that* claim
+  untrue, which is its own answer (§a.5).
+
+> ⚠️ Base64 values are illustrative and truncated.

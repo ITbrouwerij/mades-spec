@@ -1,8 +1,12 @@
 # Example 1: Basic single signature
 
-The simplest possible MAdES use: one document, one signer.
+The simplest MAdES document: one agreement, one human signer.
 
-The content below is followed by a single `~~~mades-sig` block. The signature covers everything from the start of this document up to (but excluding) the opening `~~~mades-sig` fence. To verify: strip the sig-block, normalise trailing whitespace, recompute HMAC-SHA256 with the shared key, compare with the `signature` field.
+The content is followed by a single `<!-- mades-sig -->` block. The signature
+covers everything from the start of the document up to the opening `<!--`, plus
+the block's own comment lines and fields. To verify: rebuild the signing input
+(§a.3), check it against the certificate in the block, and check the certificate
+chain against your trust anchor.
 
 ---
 
@@ -16,21 +20,42 @@ Either party may terminate with 30 days written notice.
 
 ---
 
-~~~mades-sig
-# ✓ Signed by jane.doe@acme.example — 2026-04-28T14:30:00Z (HMAC-SHA256, MAdES-Basic)
-version: 1
-algorithm: hmac-sha256
+<!-- mades-sig
+# ✓ Signed by jane.doe@acme.example — approval — human — 2026-08-14
+version: 5
+algorithm: ecdsa-p256
 signer: jane.doe@acme.example
-signed-at: 2026-04-28T14:30:00Z
-signature: 9f4e2b8c1d7a5f6e3b9c8d2a1f4e7b6c5d8a9f2e1b4c7d6a8f5e2b9c1d4a7f6e
-~~~
+signer-kind: human
+commitment: approval
+signed-at: 2026-08-14T14:30:00+02:00
+lang: en
+certificate-chain:
+  - MIIBkTCCATegAwIBAgIUY2hlY2sgdGhpcyBpcyBhbiBleGFtcGxl…
+  - MIIB3jCCAYSgAwIBAgIUZXhhbXBsZSBpc3N1aW5nIGF1dGhvcml0…
+timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxDzANBglghkgBZQMEAgEFAD…
+signature: MEUCIQDf4Xk2mQ8vRr1pLbYcT7wZ9nKjHgFsEaVuOxNdPqWiCg…
+-->
 
 ---
 
 ## What this example demonstrates
 
-- **Required fields only**: `version`, `algorithm`, `signer`, `signed-at`, `signature`. No vendor extensions, no field references, no key-id.
-- **Level 1 visual representation**: the `# ✓ Signed by ...` comment line is YAML (a comment, parser-ignored, content-hash-included). Anyone reading the raw `.md` immediately sees who signed and when, even without MAdES-aware tooling.
-- **HMAC baseline**: works with a pre-shared symmetric key. No public-key infrastructure needed. Good for internal/automated signing (CI, release pipelines). Doesn't qualify under eIDAS — for that, see Example 2's `ed25519` upgrade.
+- **The block is an HTML comment, not a fence.** Open this file in any Markdown
+  viewer: the agreement renders and the signature does not. Open it in an editor
+  and the signature is right there. Invisible in view, present in source.
+- **`signer-kind: human`** — mandatory since v5. This document says a person
+  signed it, and the certificate says the same; a verifier holds the two against
+  each other (§a.11).
+- **`commitment: approval`** — *"I agree to the content"*, as opposed to
+  `creation` (*"I produced this and I fix this version"*). The commitment is
+  signed, so it cannot be reinterpreted afterwards.
+- **The certificate travels with the document.** No key server to reach, no
+  lookup that can fail in five years. The chain is in the file; only the trust
+  anchor has to come from somewhere else.
+- **The timestamp is what makes it last.** These certificates live for minutes
+  (§c.3). The timestamp proves the signature existed while the certificate was
+  valid, so an expired certificate is normal and is not a finding.
 
-> ⚠️ **Note**: the `signature` field above is illustrative, not a real HMAC. Don't try to verify against any specific key — this is a documentation example.
+> ⚠️ The base64 values above are illustrative and truncated. This is a
+> documentation example, not a verifiable document — see
+> [`reference/`](../reference/) to produce a real one.

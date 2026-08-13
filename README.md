@@ -195,7 +195,9 @@ Issues and pull requests are both welcome; ports to other languages especially.
 Authored by **Jan Smets** — [ITbrouwerij](https://itbrouwerij.be).
 
 MAdES is intended as a vendor-neutral open standard. Vendor-specific fields
-belong in the `x-` namespace and never in the core.
+carry a reverse-DNS namespace the vendor demonstrably controls
+(`build.vecto.void`) and never sit in the core — no registry, no institution,
+and no `x-` prefix ([RFC 6648](https://www.rfc-editor.org/rfc/rfc6648.txt)).
 
 - **Specification text** ([SPEC.md](SPEC.md), [README.md](README.md),
   [CHANGELOG.md](CHANGELOG.md), [examples/](examples/)) —
