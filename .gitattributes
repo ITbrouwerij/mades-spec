@@ -1,17 +1,22 @@
-# Signed artefacts are BYTES, not text. Git must never touch them.
-#
-# Without this, git's line-ending heuristics convert LF to CRLF on checkout for
-# anyone on Windows — and a signed document whose bytes changed is a signed
-# document that no longer verifies. The signature would still be present, still
-# look right, and fail for every reader who cloned the repository. Silent, total,
-# and blamed on the format rather than on the checkout.
-#
-# `-text` means: no conversion, in either direction, ever.
-examples/05-a-real-signed-document.md   -text
-*.pdf                                    binary
-
-# Everything else is ordinary text and normalises to LF in the repository.
+# Ordinary text normalises to LF in the repository.
 *.md      text eol=lf
 *.mjs     text eol=lf
 *.json    text eol=lf
 *.yml     text eol=lf
+
+# ── Signed artefacts. These rules MUST come last. ────────────────────────────
+#
+# In .gitattributes the LAST matching pattern wins, so a general `*.md text`
+# above would otherwise override what follows. (It did, on the first attempt —
+# `git check-attr` reported `text: set` and the protection was not in effect.)
+#
+# Signed artefacts are BYTES, not text. Without `-text`, git's line-ending
+# handling rewrites them on checkout, and a signed document whose bytes changed
+# is a signed document that no longer verifies. The signature would still be
+# present, still look right, and fail for every reader who cloned the repository
+# — silent, total, and blamed on the format rather than on the checkout.
+#
+# `-text` means: no conversion, in either direction, ever. Verify with
+# `git check-attr text eol -- <file>`; it must report `text: unset`.
+examples/05-a-real-signed-document.md   -text
+*.pdf                                   binary
