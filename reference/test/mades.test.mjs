@@ -21,6 +21,7 @@ import {
 
 const REAL = new URL('../../examples/05-a-real-signed-document.md', import.meta.url);
 const ABOUT = new URL('../../examples/06-signing-a-document-about-signing.md', import.meta.url);
+const WORKED = new URL('../../examples/07-a-worked-example.md', import.meta.url);
 
 // ---------------------------------------------------------------------------
 
@@ -108,6 +109,33 @@ describe('a signed document that describes signing', () => {
 
   it('survives checkout with its bytes intact', () => {
     assert.ok(!document.includes('\r'), 'the file must be stored and checked out with LF endings');
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('the worked example that supersedes 05', () => {
+  // `05` still says a document about MAdES cannot be signed with MAdES. It was
+  // signed before v1.4 and is deliberately left alone — a signed document is not
+  // rewritten to say something more flattering. This one replaces it, and writes
+  // the marker in full to show why it can.
+  const document = readFileSync(WORKED, 'utf8');
+
+  it('quotes the opening marker in ordinary prose', () => {
+    assert.ok((document.match(/<!-- mades-sig/g) ?? []).length >= 2);
+  });
+
+  it('contains exactly ONE block, and verifies', () => {
+    assert.equal(findBlocks(document).length, 1);
+    const d = signingInputForBlock(document, 0);
+    const leaf = new X509Certificate(Buffer.from(d.fields['certificate-chain'][0], 'base64'));
+    const v = createVerify('sha256');
+    v.update(d.signingInput, 'utf8');
+    assert.ok(v.verify(leaf.publicKey, Buffer.from(d.signature, 'base64')));
+  });
+
+  it('survives checkout with its bytes intact', () => {
+    assert.ok(!document.includes(String.fromCharCode(13)), 'the file must be stored and checked out with LF endings');
   });
 });
 

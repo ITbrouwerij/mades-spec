@@ -23,4 +23,5 @@
 # invisible until a stranger reports it.
 examples/05-a-real-signed-document.md          -text
 examples/06-signing-a-document-about-signing.md -text
+examples/07-a-worked-example.md                 -text
 *.pdf                                          binary

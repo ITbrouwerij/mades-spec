@@ -7,7 +7,7 @@ built-ins only. Node 20+.
 mades-canon.mjs    block location, parsing, canonicalisation, signing input
 mades-verify.mjs   verify a document using nothing but the document
 mades-sign.mjs     append a signature, signing with a local key
-test/              31 tests, including two against real signed documents
+test/              34 tests, including three against real signed documents
 ```
 
 ## Verify
@@ -94,7 +94,7 @@ say something more flattering is the exact thing this format exists to prevent.
 npm test
 ```
 
-31 tests. The first suite verifies the real signed document, checks that a single
+34 tests. The first suite verifies the real signed document, checks that a single
 changed character breaks it, and asserts the file still has LF endings — that
 last one is a `.gitattributes` test in disguise, and the reason CI runs on
 Windows. Without `-text` on that file, git rewrites it on checkout there and the
