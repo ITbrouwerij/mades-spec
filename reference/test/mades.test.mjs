@@ -475,3 +475,49 @@ describe('§a.13 archive timestamps', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+
+describe('§a.5 a line that cannot be placed is reported, never dropped', () => {
+  // FOUND WHILE DRAFTING §a.12. The first draft of `covers` was a list of maps,
+  // and the parser accepted the first line and made the rest disappear — not
+  // into `unparsed`, simply gone. A block like that received a verdict over
+  // content the reader had not fully read, which is the exact outcome §a.5's
+  // totality rule exists to prevent.
+  const block = (body) => findBlocks(['x', '', '<!-- mades-sig', body, '-->', ''].join('\n'))[0];
+
+  it('an indented key after a list item does not vanish', () => {
+    const { fields, unparsed } = parseBlockBody(block([
+      'covers:',
+      '  - name: annex.pdf',
+      '    media-type: application/pdf',
+      '    digest: sha256:9f2c',
+    ].join('\n')).body);
+    assert.deepEqual(fields.covers, ['name: annex.pdf']);
+    assert.equal(unparsed.length, 2, 'both orphaned lines are reported');
+    assert.match(unparsed[0], /media-type/);
+  });
+
+  it('a list item after a map key does not vanish either', () => {
+    const { unparsed } = parseBlockBody(block([
+      'appearance:',
+      '  mode: signature',
+      '  - stray',
+    ].join('\n')).body);
+    assert.equal(unparsed.length, 1);
+    assert.match(unparsed[0], /stray/);
+  });
+
+  it('and a well-formed map or list is untouched', () => {
+    const { fields, unparsed } = parseBlockBody(block([
+      'appearance:',
+      '  mode: signature',
+      'certificate-chain:',
+      '  - MIIB',
+      '  - MIIC',
+    ].join('\n')).body);
+    assert.deepEqual(fields.appearance, { mode: 'signature' });
+    assert.deepEqual(fields['certificate-chain'], ['MIIB', 'MIIC']);
+    assert.equal(unparsed.length, 0);
+  });
+});
+

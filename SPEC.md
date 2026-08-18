@@ -105,6 +105,10 @@
 > block, `mades-archive-ts`, covering the whole document rather than a reserved
 > field inside a signature block — which closes the open question of what it
 > covers, and makes renewal an ordinary append rather than an exception to §b.
+> Reference fix in the same release: a line that could not be placed in an
+> already-opened container was silently discarded instead of reported, so a
+> block could receive a verdict over content the reader had not fully read.
+> It now reaches `unparsed`, and §a.5 makes such a block `unsupported`.
 > **v0.9** — corrected "B-T is the ceiling": B-LT is unreachable for short-lived
 > certificates but **B-LTA is not**, since archive timestamps rest on the
 > timestamp chain rather than on revocation data (§g). Nonce comparison made

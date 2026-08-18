@@ -184,12 +184,22 @@ export function parseBlockBody(body) {
       if (item) {
         if (container === null) { container = 'list'; fields[pendingKey] = []; }
         if (container === 'list') fields[pendingKey].push(item[1].trim());
+        // A list item under a key that already opened a map has nowhere to go.
+        // It must be REPORTED, not dropped: §a.5 makes a block with a line this
+        // reader cannot place `unsupported`, and a line that vanishes instead
+        // produces a verdict over a document the reader only partly understood.
+        else unparsed.push(line);
         continue;
       }
       const sub = new RegExp(`^[ \\t]+(${KEY}):[ \\t]*(.*)$`).exec(line);
       if (sub) {
         if (container === null) { container = 'map'; fields[pendingKey] = {}; }
         if (container === 'map') fields[pendingKey][sub[1]] = sub[2].trim();
+        // The mirror case, and the one that was actually reached: an indented
+        // key after a list item. It is what a list of maps looks like, and that
+        // shape does not exist here — which is why `covers` (§a.12) puts one
+        // entry on one line instead.
+        else unparsed.push(line);
       } else {
         unparsed.push(line); // indented, but neither — do not discard it
       }
