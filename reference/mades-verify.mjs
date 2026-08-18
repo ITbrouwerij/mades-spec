@@ -25,7 +25,8 @@ import { findBlocks, signingInputForBlock } from './mades-canon.mjs';
 const KNOWN_FIELDS = new Set([
   'version', 'algorithm', 'signer', 'signer-kind', 'automation', 'commitment',
   'signed-at', 'lang', 'appearance', 'revision', 'supersedes', 'represents',
-  'key-id', 'field', 'format', 'certificate-chain', 'timestamp', 'signature',
+  'covers', 'key-id', 'field', 'format', 'certificate-chain', 'timestamp',
+  'signature',
 ]);
 
 /** Node's verifier names, keyed by the `algorithm` field (§c.1). */
@@ -234,6 +235,32 @@ function verifyBlock(index) {
     info('', C.dim + 'stated, not verified here — see SPEC.md §c.5' + C.reset);
   } else {
     note('no timestamp — this signature cannot outlive its certificate');
+  }
+
+  // --- §a.12 the files that ride along -----------------------------------
+
+  if (d.fields.covers) {
+    const entries = toList(d.fields.covers);
+    info('covers', `${entries.length} accompanying file(s)`);
+    let readable = true;
+    for (const line of entries) {
+      // §a.12: digest, media type, then the name — which is the remainder, so a
+      // name may contain spaces and the two before it may not.
+      const m = /^(\S+)[ ](\S+)[ ](.+)$/.exec(String(line));
+      if (!m) {
+        bad(`a \`covers\` entry is not «digest media-type name»: ${line}`);
+        readable = false;
+        continue;
+      }
+      const [, digest, mediaType, name] = m;
+      info('', `${name} ${C.dim}— ${mediaType} — ${digest}${C.reset}`);
+    }
+    if (readable) {
+      // The files themselves were not handed to this reader, so the honest
+      // verdict is §a.6's: the claim is signed, and unchecked. Reporting it as
+      // satisfied would be the failure the field exists to prevent.
+      note('the accompanying files were not supplied — coverage is asserted but unverified (§a.12)');
+    }
   }
 
   // --- §d level 4: what this reader does not understand --------------------

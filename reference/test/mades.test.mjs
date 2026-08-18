@@ -349,3 +349,63 @@ describe('locating blocks (§a.1)', () => {
     assert.ok(verifyRaw(null, Buffer.from(back.signingInput, 'utf8'), publicKey, Buffer.from(back.signature, 'base64')));
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('§a.12 covers — the files that ride along', () => {
+  // The shape follows from the field syntax, which has exactly two containers:
+  // a list of scalars and a map of scalars. A list of maps is not expressible,
+  // so an entry is one line and the name is the remainder of it.
+  const doc = [
+    'Agreement, with annexes.',
+    '',
+    '<!-- mades-sig',
+    'version: 5',
+    'algorithm: ed25519',
+    'signer: alice@example.com',
+    'signed-at: 2026-08-19T09:00:00Z',
+    'covers:',
+    '  - sha256:9f2c1d40 application/pdf annex-b-pricing.pdf',
+    '  - sha256:41ab77e2 image/png floor plan, ground level.png',
+    'signature: 00',
+    '-->',
+    '',
+  ].join('\n');
+
+  it('parses as a list of entries, in the order written', () => {
+    const { fields } = parseBlockBody(findBlocks(doc)[0].body);
+    assert.deepEqual(fields.covers, [
+      'sha256:9f2c1d40 application/pdf annex-b-pricing.pdf',
+      'sha256:41ab77e2 image/png floor plan, ground level.png',
+    ]);
+  });
+
+  it('lets a name carry spaces, because it is the remainder of the line', () => {
+    const { fields } = parseBlockBody(findBlocks(doc)[0].body);
+    const [, , , name] = /^(\S+)[ ](\S+)[ ](.+)$/.exec(fields.covers[1]);
+    assert.equal(name, 'floor plan, ground level.png');
+  });
+
+  it('is inside the signing input, so a changed digest is a changed signature', () => {
+    // The whole point of the field. Were it outside, an annex could be swapped
+    // and no value in the block would move (§a.3).
+    const before = signingInputForBlock(doc, 0).signingInput;
+    const after = signingInputForBlock(doc.replace("9f2c1d40", "9f2c1d41"), 0).signingInput;
+    assert.notEqual(before, after);
+  });
+
+  it('survives a round trip through serializeBlock', () => {
+    const { fields, comments } = parseBlockBody(findBlocks(doc)[0].body);
+    const round = serializeBlock(fields, comments);
+    assert.deepEqual(parseBlockBody(findBlocks(round)[0].body).fields.covers, fields.covers);
+  });
+
+  it('is a field this reader knows, so it does not make the block unsupported', () => {
+    // §a.3 calls its list of covered fields complete, and §a.1 makes a bare name
+    // this reader cannot place `unsupported`. Forgetting to register `covers`
+    // would therefore turn every document carrying one into an unreadable block.
+    const source = readFileSync(new URL('../mades-verify.mjs', import.meta.url), 'utf8');
+    assert.match(source, /'covers',/);
+  });
+});
+

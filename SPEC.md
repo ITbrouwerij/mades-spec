@@ -215,7 +215,8 @@ belongs.
 **Optional:** `commitment` (§a.4, default `approval`) · `automation` (§a.11) ·
 `lang` (§a.9) · `appearance` (§a.8) · `certificate-chain` (base64 DER,
 signer-first) · `timestamp` (§c.5) · `represents` (§a.6) · `revision` +
-`supersedes` (§a.7) · `format` (§c.6) · `key-id` (§c.7) · `field` (§b).
+`supersedes` (§a.7) · `covers` (§a.12) · `format` (§c.6) · `key-id` (§c.7) ·
+`field` (§b).
 
 **Vendor extensions** carry a namespace the vendor demonstrably controls,
 written as a reverse-DNS name: `build.vecto.void`. They are part of the signing
@@ -306,8 +307,8 @@ signing and verification — an intermittent, silent failure.
 | `archive-timestamp` *(reserved, B-LTA)* | applied over the completed signature, and renewed over time |
 
 Everything else — `certificate-chain`, `signer-kind`, `automation`,
-`appearance`, `lang`, `represents`, `revision`, `supersedes`, and all vendor
-extensions — **is** covered. Implementations MUST treat this list as complete
+`appearance`, `lang`, `represents`, `covers`, `revision`, `supersedes`, and all
+vendor extensions — **is** covered. Implementations MUST treat this list as complete
 for the version they implement and MUST NOT invent additional exclusions.
 
 > **`signer-kind` being inside the signature is what makes it evidence rather
@@ -415,6 +416,9 @@ attribute. Because `represents` is in the signing input, the binding is itself
 protected — it is meaningless without §a.3, since a forgeable binding invites
 reliance. A verifier seeing only one representation MUST report the binding as
 **asserted but unverified**.
+
+`represents` binds *the same act in another form*. For files that merely
+accompany the signed text, see `covers` (§a.12).
 
 ### a.7 Revision chaining — `revision` / `supersedes`
 
@@ -555,7 +559,7 @@ MUST NOT redraw it.
 
 Signing uses sorted keys (§a.3); *rendering* MAY use a human-friendly order —
 `version, algorithm, signer, signer-kind, automation, commitment, signed-at,
-lang, appearance, revision, supersedes, represents, key-id, field, format,
+lang, appearance, revision, supersedes, represents, covers, key-id, field, format,
 certificate-chain, timestamp, signature`, with vendor extensions last.
 Verification never depends on it.
 
@@ -683,6 +687,78 @@ human's `approval` then signs over it, including that block, per §b.
 That sequence — an automated `creation` beneath a human `approval` — is the
 normal shape of a document that a machine prepared and a person stood behind.
 It is published as an interoperability vector (§e).
+
+### a.12 Coverage of accompanying files — `covers`
+
+One act may consist of more than one file. A contract has annexes; a report has
+its data. Only one of them is the text a signature is written under, and the rest
+travel alongside — unsigned, and by construction outside the signing input,
+because a signature covers the content preceding its block and nothing else.
+
+That limit is not shared by the neighbouring formats: a XAdES signature carries
+one `ds:Reference` per data object, and a PAdES signature covers the whole file
+including anything embedded in it. In MAdES, without this field, **an
+accompanying file can be exchanged after signing without any value in the block
+changing.**
+
+`covers` names those files, with their digests, inside the block:
+
+```markdown
+covers:
+  - sha256:9f2c1d40 application/pdf annex-b-pricing.pdf
+  - sha256:41ab77e2 image/png floor plan, ground level.png
+```
+
+Each entry is one line of three parts, separated by single spaces:
+
+| part | |
+|---|---|
+| **digest** | of the file's bytes as they stood at signing, `<alg>:<hex>` |
+| **media type** | RFC 6838 |
+| **name** | the file name as it was presented to the signer |
+
+The name is everything after the second space, so a name may contain spaces and
+a digest and a media type may not.
+
+> **Why the digest comes first.** It is the load-bearing value, and a long file
+> name would otherwise push it out of view in exactly the reading where somebody
+> is checking it. Putting it first is also what lets the line be read without a
+> quoting rule: two fixed tokens, then the remainder.
+
+**Entries are written in the order presented to the signer, and MUST be preserved
+in that order. Implementations MUST NOT sort them.** The list is part of the
+signing input (§a.3), so a reordering is a different input and a different
+signature — but the reason is not mechanical: the signer saw a list in an order,
+and that order is part of what they agreed to.
+
+A verifier:
+
+- MUST report an entry whose file it was not given as **asserted but
+  unverified**, as in §a.6;
+- MUST report an entry whose digest does not match as **coverage broken**, and
+  MUST NOT report it as an invalid signature. The signature is intact; what it
+  covered is not what was presented.
+
+Implementations producing both representations in one ceremony SHOULD carry the
+equivalent on the PAdES side as a signed attribute, as §a.6 requires for
+`represents`. **This is expected to become a MUST**; it is a SHOULD here so that
+an implementation may ship the Markdown side first.
+
+> **Why a separate field rather than a wider `represents`.** `represents` says
+> *the same act, in another form*; `covers` says *a different file, riding
+> along*. Merged, a verifier could not say which of the two claims failed — and
+> those two failures mean different things to whoever is reading.
+
+> **Why a media type and not `format`.** `format` already names a container
+> format in this specification (§c.6, and inside `represents`). An accompanying
+> file has neither a signature format nor a container; it has a media type. One
+> name, one meaning.
+
+> **`covers` is a claim about what was presented, not a claim of possession.** A
+> verifier holding only the signed text can confirm the list was signed; it
+> cannot know whether the file it was later handed is the one the signer saw,
+> except by the digest. That is §a.6's asserted-but-unverified, for the same
+> reason.
 
 ## b. Multi-signer model
 
