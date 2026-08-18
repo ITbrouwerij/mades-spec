@@ -111,13 +111,33 @@ Both exist because of a measured failure. Before they did, a line reading
 block without breaking the signature — and that block is precisely what a reader
 sees in a plain text editor.
 
+### And the files that ride along
+
+An act is often more than one file. A contract has annexes; a report has its
+data. Those files are not signed — only the text is — and until v1.5 nothing
+stopped one being exchanged afterwards without a single value in the block
+changing.
+
+`covers` names them, with their digests, inside the block:
+
+```
+covers:
+  - sha256:9f2c1d40 application/pdf annex-b-pricing.pdf
+  - sha256:41ab77e2 image/png floor plan, ground level.png
+```
+
+A verifier that was not handed the files says so — *asserted but unverified* —
+and one whose digest does not match reports **coverage broken**, never an invalid
+signature. The signature is intact; what it covered is not what was presented.
+Two different failures, and collapsing them would be its own kind of lie.
+
 ---
 
 ## What is in the spec
 
 | | |
 |---|---|
-| **§a** Format | the block, canonicalisation, the signing input, commitment types, verification, representation binding, revision chaining, appearance, language, rendering order, signer category |
+| **§a** Format | the block, canonicalisation, the signing input, commitment types, verification, representation binding, revision chaining, appearance, language, rendering order, signer category, coverage of accompanying files, archive timestamps |
 | **§b** Multi-signer | sequential append by default; pre-declared signature fields for staged workflows; pure-parallel deliberately excluded |
 | **§c** Cryptography | asymmetric for personal signatures, short-lived certificates, trust anchoring, timestamping, container formats, key distribution |
 | **§d** Visual | how a signed document may present itself without the appearance becoming load-bearing |
@@ -136,6 +156,17 @@ expired certificate on a MAdES signature is normal and is not a finding.
 sign the same bytes and have both results merge cleanly, because the second
 signature changes what the first covered. The spec says so plainly rather than
 leaving implementers to discover it.
+
+**A signature is kept alive by layers, not by bigger keys.** Every algorithm
+weakens eventually, and no key size chosen today survives that. An **archive
+timestamp** (§a.13, new in v1.5) records that the whole document already stood in
+this exact form while the choices beneath it were still sound; a later layer
+records the same again before the previous one ages. Reading is outside-in, and a
+signature under a valid layer is reported as *valid as of that layer* rather than
+as doubtful — discarding that would waste the only thing the layer establishes.
+
+It is its own block, it needs no certificate and no signer, and it takes exactly
+the canonicalisation a signature takes. Renewal is an ordinary append.
 
 ---
 
@@ -189,6 +220,10 @@ Specific feedback that helps most:
 4. **The signer-category model** (§a.11) — is `human` / `automated` the right
    split, and is binding it to the certificate the right enforcement?
 5. **eIDAS profile mapping** (§g) — legal review genuinely wanted.
+6. **Archive timestamps** (§a.13, new) — the layer takes the same input a
+   signature takes, and renewal is an ordinary append. Is there a case where
+   that is not enough, and does the outside-in reading survive a document that
+   mixes layers and later signatures?
 
 Issues and pull requests are both welcome; ports to other languages especially.
 

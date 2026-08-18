@@ -9,6 +9,84 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.5 — 2026-08-19
+
+**A signature can name the files that ride along, and a document can be kept
+verifiable after its algorithms age.**
+
+### `covers` (§a.12)
+
+An act is often more than one file — a contract with annexes, a report with its
+data. Only the text is signed, and until now nothing stopped an annex being
+exchanged afterwards without a single value in the block changing. That gap is
+not shared by the neighbouring formats: XAdES carries one `ds:Reference` per data
+object, and PAdES covers the whole file including anything embedded in it.
+
+```
+covers:
+  - sha256:9f2c1d40 application/pdf annex-b-pricing.pdf
+  - sha256:41ab77e2 image/png floor plan, ground level.png
+```
+
+One entry per line: digest, media type, then the name as the remainder — which is
+what lets a name carry spaces without a quoting rule, and what keeps the digest
+from being pushed out of view by a long name. **The shape follows from the field
+syntax** (§a.1 has a list of scalars and a map of scalars; a list of maps is not
+expressible), not from preference.
+
+Order is preserved and MUST NOT be sorted: the signer saw a list in an order, and
+that order is part of what they agreed to.
+
+A verifier reports an entry it was not given the file for as **asserted but
+unverified**, and a mismatching digest as **coverage broken** — never as an
+invalid signature. The signature is intact; what it covered is not what was
+presented. That is the third place this specification separates *what I cannot
+tell* from *this was tampered with*.
+
+The PAdES equivalent is a SHOULD, noted as expected to become a MUST.
+
+### `mades-archive-ts` (§a.13) — and the reserved field is retired
+
+`archive-timestamp` was reserved as a **field** inside a signature block, with the
+open question of *whether it covers the block or the whole document*. It is now
+its own block and covers the whole document, including every preceding block. A
+field in one signature cannot cover the other signatures, and certainly not those
+appended after it — which is why both neighbours resolved it the same way
+(PAdES' document-time-stamp, CAdES' archive-time-stamp).
+
+**The open question answered itself once the input was written down.** §a.2
+already canonicalises everything up to a block, signature blocks included — that
+is what makes a counter-signature cover the signatures beneath it. An archive
+timestamp takes exactly that input. There is no second canonicalisation rule, and
+renewal is an ordinary append rather than an exception to §b.
+
+It asserts nothing about a person: no certificate, no signer, no consent, no
+credential. It carries no `commitment` and no `signer`.
+
+Reading is outside-in. A signature beneath a valid layer is **valid as of that
+layer**, even where its algorithm would not be chosen today — reporting it as
+doubtful discards the only thing the layer establishes. A byte changed beneath a
+layer breaks **that layer**, not the signature under it.
+
+### MINOR, with one behavioural note
+
+No existing signed document verifies differently: `covers` is additive, and
+`archive-timestamp` was reserved rather than in use.
+
+The exception, and it is a fix rather than a rule change: the reference
+implementation silently discarded a line that could not be placed in an
+already-opened container — an indented key after a list item, or a list item
+after a map key. Both matched their pattern, both failed the container guard, and
+both vanished without reaching `unparsed`. A block carrying such a line therefore
+received a verdict over content the reader had only partly read. §a.5 already
+required `unsupported` there; the implementation now does what the text said.
+Blocks affected are malformed ones, and they move from a verdict to no verdict.
+
+Found while drafting §a.12, whose first draft was a nested list of maps — which is
+also why `covers` puts one entry on one line.
+
+---
+
 ## v1.4 — 2026-08-14
 
 **A document about MAdES can now be signed with MAdES.**
