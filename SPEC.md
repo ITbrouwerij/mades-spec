@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.4 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
+> **Status:** Specification · **Version:** 1.5 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -99,6 +99,12 @@
 > (§a.1) — it would close the comment early and silently turn a signed document
 > into an unsigned one.
 >
+> **v1.5** — two additions and one resolution. `covers` (§a.12): a signature can
+> name the files that ride along with the signed text, additive.
+> `archive-timestamp` is **specified and relocated** (§a.13): it becomes its own
+> block, `mades-archive-ts`, covering the whole document rather than a reserved
+> field inside a signature block — which closes the open question of what it
+> covers, and makes renewal an ordinary append rather than an exception to §b.
 > **v0.9** — corrected "B-T is the ceiling": B-LT is unreachable for short-lived
 > certificates but **B-LTA is not**, since archive timestamps rest on the
 > timestamp chain rather than on revocation data (§g). Nonce comparison made
@@ -304,7 +310,6 @@ signing and verification — an intermittent, silent failure.
 | `signature` | it is the output; it cannot be its own input |
 | `timestamp` | an RFC 3161 token is computed *over* the signature value |
 | `revocation-info` *(reserved, B-LT)* | fetched after signing |
-| `archive-timestamp` *(reserved, B-LTA)* | applied over the completed signature, and renewed over time |
 
 Everything else — `certificate-chain`, `signer-kind`, `automation`,
 `appearance`, `lang`, `represents`, `covers`, `revision`, `supersedes`, and all
@@ -759,6 +764,86 @@ an implementation may ship the Markdown side first.
 > cannot know whether the file it was later handed is the one the signer saw,
 > except by the digest. That is §a.6's asserted-but-unverified, for the same
 > reason.
+
+### a.13 Archive timestamps — `mades-archive-ts`
+
+A signature made today rests on a hash function, a signature algorithm, and a
+timestamping authority's certificate. None of the three is permanent. An archive
+timestamp records that the whole document already stood in this exact form at a
+moment when all three were still sound; a later layer records the same again
+before the previous one weakens.
+
+**An archive timestamp is its own block, and it covers the entire document
+including every preceding block.**
+
+```markdown
+<!-- mades-archive-ts
+# ⧗ Archive timestamp — 2026-08-19T09:12:04Z — covers everything above
+version: 5
+timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxCzAJ…
+-->
+```
+
+The `version` is the block version of §a.1 — one numbering for the format, not a
+second one for this block type.
+
+#### The input is the one that already exists
+
+**The timestamped digest is taken over the canonicalisation of §a.2, applied to
+the document from its start up to this block's own opening marker** — the same
+computation a signature's input begins with (§a.3), and for the same reason.
+There is no separate rule, because there was never a second question: a
+signature asks *what stood here* and answers with a key; an archive timestamp
+asks *what stood here* and answers with an authority's clock.
+
+That the preceding blocks are inside it is not a special provision either. §a.2
+already canonicalises everything up to the block, signature blocks included,
+which is what makes a counter-signature cover the signatures beneath it (§b).
+An archive timestamp inherits that property rather than adding one.
+
+**Each new layer therefore covers everything before it, including earlier archive
+timestamps.** Renewal is an ordinary append; §b's append-only invariant holds
+unchanged.
+
+#### What the block does not cover
+
+**Nothing inside this block is covered by its own token.** A token cannot cover
+the bytes that carry it — the same unavoidable exclusion §a.3 makes for
+`signature` and `timestamp`. The human-readable comment line is therefore a
+restatement for a reader, and **the token's own `genTime` is what counts.** Where
+they disagree, the token decides and the block is misleading, not authoritative.
+
+#### Reading them
+
+A verifier reads archive timestamps **from the outside in**, and reports per
+layer what stood fixed at that moment:
+
+- a layer whose token verifies establishes that **everything beneath it existed
+  in this exact form** at the time in that token;
+- a signature beneath a valid layer is reported as **valid as of that layer**,
+  even where its algorithm would not be chosen today. Reporting it as
+  weak-and-therefore-doubtful discards precisely what the layer establishes,
+  which is the whole purpose of having placed one;
+- a byte changed beneath a layer breaks **that layer**, and MUST be reported as
+  such and not as an invalid signature. They are different failures: one says
+  the archive is not intact, the other says the signer's key did not produce
+  this;
+- a layer this implementation cannot read is `unsupported` (§a.5), and the layers
+  beneath it remain readable on their own terms.
+
+#### It asserts nothing about a person
+
+**An archive timestamp requires no certificate, no signer, no consent and no
+credential.** It is a machine act against a timestamping authority, and nothing
+in it says a human did anything. It carries no `commitment` and no `signer`, and
+an implementation that attaches either is describing something other than what
+this section defines.
+
+> **Why not a field inside a signature block**, which earlier versions reserved.
+> A field in one block cannot cover the other signatures, and certainly not the
+> ones appended after it. Both neighbouring formats resolved this the same way:
+> PAdES' document-time-stamp covers the entire file, and CAdES' archive-time-stamp
+> covers the whole SignedData including every signature.
 
 ## b. Multi-signer model
 
@@ -1259,11 +1344,13 @@ of them. Vendor extensions via a reverse-DNS namespace (§a.1).
   extension or a signed manifest attribute could anchor it; not specified,
   because the certificate path covers every deployment that needs the
   distinction today.
-- **`archive-timestamp`** — the B-LTA field is reserved but **not yet
-  specified**. The higher priority of the two reserved fields, since it is the
-  only long-term path on a short-lived-certificate architecture. Open: whether
-  it covers the block or the whole document including later blocks, and how
-  renewal is represented without breaking the append-only invariant of §b.
+- ~~**`archive-timestamp`**~~ — **resolved** (§a.13, v1.5). Its own block, not a
+  field, covering the whole document including every preceding block. Renewal is
+  a further appended block covering everything before it, so §b's append-only
+  invariant holds unchanged rather than needing an exception. The question
+  answered itself once the input was written down: it is the same
+  canonicalisation a signature uses, so there was never a second rule to
+  invent.
 - **`revocation-info`** — the B-LT field is reserved, unreachable for short-lived
   certificates, and only worth specifying for deployments issuing long-lived
   ones.

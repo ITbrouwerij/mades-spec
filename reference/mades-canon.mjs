@@ -15,6 +15,11 @@
  */
 
 const BLOCK_OPEN = '<!-- mades-sig';
+/**
+ * §a.13. A second block type, and deliberately not a prefix of the first: an
+ * archive timestamp is not a signature and must never be read as one.
+ */
+const ARCHIVE_OPEN = '<!-- mades-archive-ts';
 const BLOCK_CLOSE = '-->';
 
 /** Excluded from the signing input. Everything else is covered (§a.3). */
@@ -112,14 +117,23 @@ export function findBlocks(content) {
     }
     if (fence) continue;
 
-    if (!line.startsWith(BLOCK_OPEN)) continue;
+    const marker = line.startsWith(ARCHIVE_OPEN) ? ARCHIVE_OPEN
+      : line.startsWith(BLOCK_OPEN) ? BLOCK_OPEN
+        : null;
+    if (!marker) continue;
 
     const end = content.indexOf(BLOCK_CLOSE, lineStart);
     if (end === -1) break;
     blocks.push({
+      // Both kinds live in ONE index space, and that is the point. `canonicalize`
+      // slices up to a block's start, so a signature written after an archive
+      // layer covers that layer, and an archive layer covers every signature
+      // above it. Give them separate numbering and each would stop seeing the
+      // other.
+      kind: marker === ARCHIVE_OPEN ? 'archive-ts' : 'sig',
       start: lineStart,
       end: end + BLOCK_CLOSE.length,
-      body: content.slice(lineStart + BLOCK_OPEN.length, end),
+      body: content.slice(lineStart + marker.length, end),
     });
 
     // Jump past the block, so its own contents are never scanned for fences.

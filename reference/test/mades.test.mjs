@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
-  normalize, findBlocks, parseBlockBody, signingInputForBlock, serializeBlock, rulesFor,
+  normalize, findBlocks, parseBlockBody, signingInputForBlock, serializeBlock, rulesFor, canonicalize,
 } from '../mades-canon.mjs';
 
 const REAL = new URL('../../examples/05-a-real-signed-document.md', import.meta.url);
@@ -406,6 +406,72 @@ describe('§a.12 covers — the files that ride along', () => {
     // would therefore turn every document carrying one into an unreadable block.
     const source = readFileSync(new URL('../mades-verify.mjs', import.meta.url), 'utf8');
     assert.match(source, /'covers',/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe('§a.13 archive timestamps', () => {
+  const doc = [
+    'The agreement.',
+    '',
+    '<!-- mades-sig',
+    'version: 5',
+    'algorithm: ed25519',
+    'signer: alice@example.com',
+    'signature: aa',
+    '-->',
+    '',
+    '<!-- mades-archive-ts',
+    '# ⧗ Archive timestamp — 2026-08-19T09:12:04Z — covers everything above',
+    'version: 5',
+    'timestamp: MIAGCSqGSIb3',
+    '-->',
+    '',
+  ].join('\n');
+
+  it('is found as its own kind, not as a signature', () => {
+    const blocks = findBlocks(doc);
+    assert.deepEqual(blocks.map((b) => b.kind), ['sig', 'archive-ts']);
+  });
+
+  it('shares one index space with signatures', () => {
+    // Separate numbering and the two kinds would stop seeing each other: a
+    // signature appended later must cover the layer, and the layer must cover
+    // every signature above it.
+    assert.equal(findBlocks(doc).length, 2);
+  });
+
+  it('takes the SAME canonicalisation a signature takes — no second rule', () => {
+    // §a.13: the document from its start up to this block own opening marker.
+    // If this ever diverges from canonicalize(), the section is wrong.
+    const upToLayer = canonicalize(doc, 1);
+    assert.ok(upToLayer.includes('The agreement.'));
+    assert.ok(upToLayer.includes('<!-- mades-sig'), 'the layer covers the signature above it');
+    assert.ok(!upToLayer.includes('mades-archive-ts'), 'and not itself');
+  });
+
+  it('does not disturb the signature beneath it', () => {
+    // The load-bearing property of the whole section. Placing a layer must not
+    // change what any earlier signature signed, or every renewal would break
+    // every signature it was meant to preserve.
+    const zonder = ['The agreement.', '', '<!-- mades-sig', 'version: 5',
+      'algorithm: ed25519', 'signer: alice@example.com', 'signature: aa', '-->', ''].join('\n');
+    assert.equal(signingInputForBlock(doc, 0).signingInput, signingInputForBlock(zonder, 0).signingInput);
+  });
+
+  it('a second layer covers the first', () => {
+    const twee = doc + ['<!-- mades-archive-ts', 'version: 5', 'timestamp: MIAB',
+      '-->', ''].join('\n');
+    const blocks = findBlocks(twee);
+    assert.deepEqual(blocks.map((b) => b.kind), ['sig', 'archive-ts', 'archive-ts']);
+    assert.ok(canonicalize(twee, 2).includes('MIAGCSqGSIb3'), 'the outer layer covers the inner one');
+  });
+
+  it('the marker is not a prefix of the signature marker', () => {
+    // Deliberate: an archive timestamp read as a signature would be reported as
+    // a signature with no signature value.
+    assert.ok(!'<!-- mades-archive-ts'.startsWith('<!-- mades-sig'));
   });
 });
 

@@ -20,7 +20,7 @@
 import { createVerify, createPublicKey, verify as verifyRaw, X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import { findBlocks, signingInputForBlock } from './mades-canon.mjs';
+import { findBlocks, parseBlockBody, signingInputForBlock } from './mades-canon.mjs';
 
 const KNOWN_FIELDS = new Set([
   'version', 'algorithm', 'signer', 'signer-kind', 'automation', 'commitment',
@@ -99,7 +99,56 @@ console.log(`${C.green}${C.bold}${verified} signature(s) verify.${C.reset}${rest
 
 // ---------------------------------------------------------------------------
 
+/**
+ * §a.13 — an archive layer.
+ *
+ * WHAT IT ESTABLISHES, and the wording is the whole job: everything above this
+ * block already stood in exactly this form at the moment in the token. That is
+ * why a signature beneath a valid layer stays readable after its algorithm has
+ * aged — the layer is what carries it.
+ *
+ * The input is the SAME canonicalisation a signature uses (§a.2, §a.3): the
+ * document from its start up to this block's own opening marker. No separate
+ * rule, because there was never a second question — an archive timestamp asks
+ * “what stood here” exactly like a signature does, and answers it with an
+ * authority's clock instead of a signer's key.
+ *
+ * Nothing in this block is covered by its own token, which is unavoidable: the
+ * token cannot cover the bytes that carry it, the same reason `signature` and
+ * `timestamp` are excluded in §a.3. So the comment line is a restatement for a
+ * human and the token's own `genTime` is what counts.
+ */
+function reportArchiveLayer(index) {
+  const { fields, unparsed } = parseBlockBody(findBlocks(document)[index].body);
+  console.log(`${C.bold}archive layer${C.reset}`);
+
+  if (unparsed.length) {
+    withheld++;
+    note(`unsupported — ${unparsed.length} line(s) could not be parsed`);
+    return;
+  }
+
+  info('covers', 'everything above this block, including every earlier layer');
+  info('version', fields.version ?? '(absent)');
+
+  if (!fields.timestamp) {
+    // A layer with no token is not a weak layer, it is not a layer.
+    bad('no `timestamp` — this block establishes nothing (§a.13)');
+    return;
+  }
+  const bytes = Buffer.from(fields.timestamp, 'base64').length;
+  info('timestamp', `present (${bytes} bytes, RFC 3161)`);
+  // Same stance as §c.5 above: parsing RFC 3161 is out of scope for a reference
+  // implementation, and pretending otherwise would be the more expensive lie.
+  info('', C.dim + 'stated, not verified here — see SPEC.md §a.13' + C.reset);
+}
+
 function verifyBlock(index) {
+  const block = findBlocks(document)[index];
+
+  // §a.13 — an archive timestamp is not a signature and is not reported as one.
+  if (block.kind === 'archive-ts') return reportArchiveLayer(index);
+
   const d = signingInputForBlock(document, index);
   console.log(`${C.bold}signature ${index + 1}${C.reset}`);
 
