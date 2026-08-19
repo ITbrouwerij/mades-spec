@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml/badge.svg)](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml)
 
-> **Specification v1.6** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
+> **Specification v1.7** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
 >
 > An open specification for signing Markdown. Not the documentation of any one
 > product — a conforming implementation must be able to succeed knowing nothing
@@ -168,12 +168,17 @@ as doubtful — discarding that would waste the only thing the layer establishes
 It is its own block, it needs no certificate and no signer, and it takes exactly
 the canonicalisation a signature takes. Renewal is an ordinary append.
 
-**A signed document ends where the signature ends** (§a.14, new in v1.6). A
-signature covers the content *preceding* its block, so anything appended after
-the last block is outside every signature by construction — and until v1.6
+**A signed document ends where the signature ends** (§a.14, new in v1.6, refined
+in v1.7). A signature covers the content *preceding* its block, so anything
+appended after the last block is outside every signature by construction — and until v1.6
 nothing said a reader had to look. A conforming document therefore ends at its
 last block, and a verifier reports anything after it as **invalid**, not as a
 note beside a green result.
+
+One trailing line ending is allowed — `LF`, `CRLF` or a lone `CR`, the same three
+§a.2 normalises. v1.7 widened that word: v1.6 said "line feed", and a valid
+document saved in a Windows editor stopped conforming without a character
+changing. Two endings, or trailing whitespace, is still content.
 
 The instinctive remedy — a signed length or digest of the content — was
 considered and rejected: appended bytes are not part of the content such a field

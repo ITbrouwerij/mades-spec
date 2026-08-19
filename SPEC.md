@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.6 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
+> **Status:** Specification · **Version:** 1.7 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -366,7 +366,7 @@ presented as agreement. Unknown values MUST be reported verbatim as
 ### a.5 Verification procedure
 
 1. **Check the document boundary (§a.14).** If anything but at most one line
-   feed follows the closing `-->` of the last block, the document is
+   ending follows the closing `-->` of the last block, the document is
    **`invalid`**. Report it as such — those bytes are outside every signature,
    and no signature below can speak for them.
 2. Locate the block.
@@ -856,9 +856,10 @@ this section defines.
 ### a.14 Document boundary — nothing after the last block
 
 **A conforming MAdES document ends at the closing `-->` of its last block**, with
-at most one trailing line feed. Any other bytes after that point make the
-document non-conforming, and a verifier **MUST** report them as **`invalid`**,
-never as a warning beside a valid signature.
+at most one trailing **line ending** — `LF`, `CRLF` or a lone `CR`, the same three
+§a.2 normalises. Any other bytes after that point make the document
+non-conforming, and a verifier **MUST** report them as **`invalid`**, never as a
+warning beside a valid signature.
 
 #### Why this rule exists
 
@@ -910,6 +911,33 @@ something there.
 
 It is also checkable without keys: whether a document ends at its last block is
 visible in the bytes.
+
+#### Why a line ending and not a line feed *(v1.7)*
+
+v1.6 said "at most one trailing line feed", and three independent implementations
+read that the way it was written: `-->
+` was rejected. That is defensible from
+the words and wrong from the format.
+
+§a.2 normalises `CRLF` and a lone `CR` to `LF` **on purpose**, and says why:
+
+> Rules 1 and 2 are what make a document authored on Windows verify on Linux.
+> Without them the failure is silent and has no diagnostic.
+
+A format that goes to that trouble for the content, and then rejects the same
+editor at the boundary, holds two opposite positions at once. Someone opens a
+valid signed document in a Windows editor, saves it without changing a character,
+and it stops conforming.
+
+So the word was too narrow, not the rule. **One trailing line ending, in any of
+the three spellings §a.2 already recognises.** Everything else stands: two line
+endings is still non-conforming, and so is trailing whitespace — those are not
+line endings, and the point of the boundary is that it is visible in the bytes.
+
+> Raised by the Vecto Sign implementation on 2026-08-19, the same day v1.6
+> shipped, as *"the case that hits a real user"*. It was measured first: all three
+> implementations agreed on rejecting it, which is exactly why the fix belongs in
+> the specification and not in any one of them.
 
 > **Verifiers written before this section will stay silent.** That cannot be
 > repaired from the format side, and it is the reason the requirement is

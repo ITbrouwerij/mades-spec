@@ -305,7 +305,17 @@ export function trailingContent(content) {
   const blocks = findBlocks(content);
   if (blocks.length === 0) return '';
   const rest = content.slice(blocks[blocks.length - 1].end);
-  return rest === '' || rest === '\n' ? '' : rest;
+  // ONE TRAILING LINE ENDING, IN ANY OF THE THREE SPELLINGS §a.2 RECOGNISES.
+  //
+  // v1.6 accepted only `\n`, and this implementation and two others read it that
+  // way: a document saved by a Windows editor stopped conforming without a
+  // character changing. §a.2 normalises CRLF and lone CR precisely so that a
+  // document authored on Windows verifies on Linux; rejecting the same editor at
+  // the boundary was the format holding two opposite positions at once.
+  //
+  // Two endings is still non-conforming, and so is trailing whitespace. Those
+  // are not line endings — see §a.14.
+  return rest === '' || rest === '\n' || rest === '\r\n' || rest === '\r' ? '' : rest;
 }
 
 /**

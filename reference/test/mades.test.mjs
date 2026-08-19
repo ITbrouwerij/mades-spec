@@ -531,11 +531,38 @@ describe('the document boundary (§a.14)', () => {
     assert.equal(trailingContent(worked), '');
   });
 
-  it('one trailing line feed is allowed and is not content', () => {
+  it('one trailing line ending is allowed and is not content', () => {
     // Text editors add one. It carries nothing and reporting it would train
     // readers to ignore this check.
-    assert.equal(trailingContent(worked.replace(/\n*$/, '') + '\n'), '');
-    assert.equal(trailingContent(worked.replace(/\n*$/, '')), '');
+    const bare = worked.replace(/\n*$/, '');
+    assert.equal(trailingContent(bare + '\n'), '');
+    assert.equal(trailingContent(bare), '');
+  });
+
+  it('CRLF and a lone CR count as that one ending too (v1.7)', () => {
+    // THE CASE THAT HITS A REAL USER. v1.6 accepted only `\n`, so a valid signed
+    // document opened and saved in a Windows editor stopped conforming without a
+    // character changing. §a.2 normalises exactly these three spellings so that a
+    // document authored on Windows verifies on Linux; the boundary now says the
+    // same thing instead of the opposite.
+    const bare = worked.replace(/\n*$/, '');
+    assert.equal(trailingContent(bare + '\r\n'), '');
+    assert.equal(trailingContent(bare + '\r'), '');
+  });
+
+  it('but TWO endings is still content, in any spelling', () => {
+    // The rule loosened by one word, not by one degree. Two endings means a blank
+    // line was added, and a blank line is where appended text starts.
+    const bare = worked.replace(/\n*$/, '');
+    assert.notEqual(trailingContent(bare + '\n\n'), '');
+    assert.notEqual(trailingContent(bare + '\r\n\r\n'), '');
+    assert.notEqual(trailingContent(bare + '\n\r\n'), '');
+  });
+
+  it('and trailing whitespace is not a line ending', () => {
+    const bare = worked.replace(/\n*$/, '');
+    assert.notEqual(trailingContent(bare + '\n  '), '');
+    assert.notEqual(trailingContent(bare + ' '), '');
   });
 
   it('text appended after the last block IS reported', () => {

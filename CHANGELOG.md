@@ -9,6 +9,57 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.7 — 2026-08-19
+
+**The document boundary accepts a line ending, not only a line feed.**
+
+### What changed (§a.14)
+
+v1.6 said a conforming document ends at its last block "with at most one trailing
+line feed". Three independent implementations read that exactly as written, and
+rejected `-->\r\n`.
+
+That is defensible from the words and wrong from the format. §a.2 normalises
+`CRLF` and a lone `CR` **on purpose**, with its own justification in the spec:
+
+> Rules 1 and 2 are what make a document authored on Windows verify on Linux.
+> Without them the failure is silent and has no diagnostic.
+
+A format that goes to that trouble for the content, and then rejects the same
+editor at the boundary, holds two opposite positions at once. A user opens a valid
+signed document in a Windows editor, saves it without changing a character, and it
+stops conforming.
+
+**The word was too narrow, not the rule.** §a.14 now reads *one trailing line
+ending* — `LF`, `CRLF` or a lone `CR`, the same three §a.2 already recognises.
+
+### What did not change
+
+- **Two endings is still non-conforming**, in any spelling: `\n\n`, `\r\n\r\n`,
+  `\n\r\n`. A blank line is where appended text starts.
+- **Trailing whitespace is still non-conforming.** Spaces and tabs are not line
+  endings, and the point of the boundary is that it is visible in the bytes.
+- Everything else in §a.14: still `invalid` and not a warning, still no change to
+  any signing input, still block `version: 5`.
+
+### Why this is MINOR and not PATCH
+
+It reads like a clarification and it is not one. A verifier that rejects `\r\n`
+was conforming under v1.6 and is not under v1.7 — behaviour changes, so the
+version does. Nothing that verified stops verifying: this only makes more
+documents conforming, never fewer.
+
+### Credit
+
+Raised by the **Vecto Sign** implementation on 2026-08-19, the same day v1.6
+shipped, as *"the case that hits a real user"*. They had already aligned their
+verifier with v1.6 as written, measured the divergence against the reference
+implementation, and reported it rather than quietly loosening their own side.
+That all three implementations agreed on the wrong answer is exactly why the fix
+belongs in the specification.
+
+---
+
 ## v1.6 — 2026-08-19
 
 **A signed document now ends where its signature ends.**
