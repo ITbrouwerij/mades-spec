@@ -24,6 +24,25 @@ strictly bound by equivalent confidentiality terms.
 
 ---
 
+## What this example demonstrates
+
+- **Append, never merge.** Bob's block sits after Alice's, and Bob's signing
+  input contains Alice's block verbatim. Remove Alice's signature and Bob's
+  breaks too — which is exactly the property you want from a counter-signature.
+- **Different commitments on the same document.** Alice signed `creation`
+  (*"I produced this and I fix this version"*); Bob signed `approval` (*"I agree
+  to the content"*). Both are signed fields, so neither can be re-read later as
+  the other.
+- **Order is evidence.** The `signed-at` values are within the document, under
+  each signature. A reordering of the blocks would break both.
+- **Verification is per-block.** A verifier reports each signature separately.
+  One block failing does not make the others invalid — it makes *that* claim
+  untrue, which is its own answer (§a.5).
+
+> ⚠️ Base64 values are illustrative and truncated.
+
+---
+
 <!-- mades-sig
 # ✓ Signed by alice@acme.example — creation — human — 2026-08-14
 version: 5
@@ -55,22 +74,3 @@ certificate-chain:
 timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxDzANBglghkgBZQMEAgEFAD…
 signature: 7wLpQnZ4dK1sXmEbVc9tRfGh2YjAiPoUx5vNtCkMr8DfHyWqTe…
 -->
-
----
-
-## What this example demonstrates
-
-- **Append, never merge.** Bob's block sits after Alice's, and Bob's signing
-  input contains Alice's block verbatim. Remove Alice's signature and Bob's
-  breaks too — which is exactly the property you want from a counter-signature.
-- **Different commitments on the same document.** Alice signed `creation`
-  (*"I produced this and I fix this version"*); Bob signed `approval` (*"I agree
-  to the content"*). Both are signed fields, so neither can be re-read later as
-  the other.
-- **Order is evidence.** The `signed-at` values are within the document, under
-  each signature. A reordering of the blocks would break both.
-- **Verification is per-block.** A verifier reports each signature separately.
-  One block failing does not make the others invalid — it makes *that* claim
-  untrue, which is its own answer (§a.5).
-
-> ⚠️ Base64 values are illustrative and truncated.

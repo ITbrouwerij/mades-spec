@@ -281,6 +281,34 @@ export function canonicalize(content, blockIndex) {
 }
 
 /**
+ * What follows the last block — the document boundary of §a.14.
+ *
+ * Returns the bytes after the closing `-->` of the final block, or `''` when the
+ * document ends there. **At most one line feed is allowed and is not reported**;
+ * anything else is content that no signature covers.
+ *
+ * WHY THIS EXISTS. A signature covers the content PRECEDING its block. There is
+ * no byte range and no length field, so text appended after the last block is
+ * outside every signature by construction — every signature still verifies, and
+ * the appended clause is still there. Until v1.6 nothing in the format said a
+ * reader had to look.
+ *
+ * The instinctive fix, a signed `content-length` or `content-digest`, does not
+ * help: those bytes are not part of the content such a field would describe, so
+ * it would match anyway. The boundary is a property of the document, which is
+ * why it is checked here and not derived from a block.
+ *
+ * A document with no blocks returns `''` — it is unsigned, which is a different
+ * finding and belongs to the caller.
+ */
+export function trailingContent(content) {
+  const blocks = findBlocks(content);
+  if (blocks.length === 0) return '';
+  const rest = content.slice(blocks[blocks.length - 1].end);
+  return rest === '' || rest === '\n' ? '' : rest;
+}
+
+/**
  * Rebuild what a given block signed, from the document alone.
  *
  * This is the function a recipient runs. It takes the file and nothing else —

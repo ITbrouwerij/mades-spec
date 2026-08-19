@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.5 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
+> **Status:** Specification · **Version:** 1.6 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -365,26 +365,30 @@ presented as agreement. Unknown values MUST be reported verbatim as
 
 ### a.5 Verification procedure
 
-1. Locate the block.
-2. Canonicalise the content up to (excluding) `<!-- mades-sig` (§a.2).
-3. Parse the block **totally** (§a.1). Under v4+, if any line is neither a
+1. **Check the document boundary (§a.14).** If anything but at most one line
+   feed follows the closing `-->` of the last block, the document is
+   **`invalid`**. Report it as such — those bytes are outside every signature,
+   and no signature below can speak for them.
+2. Locate the block.
+3. Canonicalise the content up to (excluding) `<!-- mades-sig` (§a.2).
+4. Parse the block **totally** (§a.1). Under v4+, if any line is neither a
    comment, blank, nor a well-formed field, STOP and report the block as
    **`unsupported`** with the number of lines that could not be read. Do not
    attempt verification: a signature checked over a partial understanding of
    what the block says is worse than no answer.
-4. Rebuild `canonical_metadata` from the **stored** comment lines and fields,
+5. Rebuild `canonical_metadata` from the **stored** comment lines and fields,
    applying the exclusion rule (§a.3).
-5. Verify the signature over the recomposed signing input.
-6. If `appearance` is present, hash the embedded image and compare with
+6. Verify the signature over the recomposed signing input.
+7. If `appearance` is present, hash the embedded image and compare with
    `appearance.digest` (§a.8).
-7. Validate `certificate-chain` against the verifier's trust store, and the
+8. Validate `certificate-chain` against the verifier's trust store, and the
    certificate's validity window against the `timestamp` (or `signed-at` when
    absent, §c.5).
-8. **(v5)** Check the signer category against the certificate (§a.11.2) and the
+9. **(v5)** Check the signer category against the certificate (§a.11.2) and the
    commitment against any constraint the certificate carries (§a.11.3). Either
    mismatch is **`invalid`** — the block claims something its credential does
    not support.
-9. Report commitment, **signer category**, achieved profile (§g), trust-anchor
+10. Report commitment, **signer category**, achieved profile (§g), trust-anchor
    outcome (§c.4), revision status (§a.7) and representation-binding status
    (§a.6).
 
@@ -849,6 +853,87 @@ this section defines.
 > PAdES' document-time-stamp covers the entire file, and CAdES' archive-time-stamp
 > covers the whole SignedData including every signature.
 
+### a.14 Document boundary — nothing after the last block
+
+**A conforming MAdES document ends at the closing `-->` of its last block**, with
+at most one trailing line feed. Any other bytes after that point make the
+document non-conforming, and a verifier **MUST** report them as **`invalid`**,
+never as a warning beside a valid signature.
+
+#### Why this rule exists
+
+A signature covers the content **preceding** its block (§a.2, §a.3). There is no
+byte range, no length field and no content digest, so nothing in a block says how
+long the document was when it was signed. Text appended after the last block is
+therefore outside every signature by construction:
+
+```markdown
+…
+signature: MEQCID0LTe/p4CgVhCNlVp3sLu7JFa+MMYJLOQDa+fDn64W2…
+-->
+
+## Additional clause
+
+The client shall further pay damages of EUR 50,000.
+```
+
+Every signature in that document still verifies. Without this section a
+conforming verifier is permitted — and a naive one is likely — to report it as
+sound.
+
+#### Why the obvious fix does not work
+
+The first remedy anyone proposes is a signed `content-length` or
+`content-digest` over the canonicalised content. **It does not close this hole,
+and specifying it would be worse than specifying nothing.**
+
+Appended text sits *after* the block, so it is not part of the canonicalised
+content such a field would describe. The digest still matches; the length still
+matches; the clause is still there. The field would be signed, would look as
+though it covered the document, and would not.
+
+A length over the *whole* document is impossible: the block contains the
+signature, so it cannot be inside its own digest. And with sequential signatures
+the problem simply moves — block N+1 covers up to itself, and after the last
+block there is again nothing.
+
+The boundary is therefore a property of the **document**, and the only place it
+can be stated is here.
+
+#### What this costs
+
+**Nothing that is already signed.** This section changes no signing input, no
+canonicalisation and no field. The block version stays `5`; a signature made
+under v1.5 is a valid signature under v1.6. What changes is that a reader is now
+obliged to look at what follows the last block, and to say so when there is
+something there.
+
+It is also checkable without keys: whether a document ends at its last block is
+visible in the bytes.
+
+> **Verifiers written before this section will stay silent.** That cannot be
+> repaired from the format side, and it is the reason the requirement is
+> normative rather than advisory: an implementation that reports the case as a
+> warning leaves the other party free to ignore it, and then the property is not
+> one you can hold anybody to.
+
+#### On eIDAS Article 26
+
+Article 26(d) requires that any subsequent change to the signed data be
+detectable. Of the four requirements it is the one this format did not meet:
+(a) is satisfied by the signer binding (§a.11.2), (b) and (c) by the key model
+(§c.3). The gap was never in the cryptography or the PKI beneath it — it was that
+the format placed no limit on what could follow the signature.
+
+Both neighbouring formats already close it, and neither needed a new field to do
+so: PAdES covers the entire file, XAdES carries a `ds:Reference` per data object.
+
+> Raised by the Vecto Sign implementation on 2026-08-19, out of an independent
+> conformity assessment, and reproduced against the v1.5 reference implementation
+> before it was reported. The remedy here is not the one that was proposed — see
+> above for why a signed length field would not have worked — but the finding was
+> exact, and the alternative would have shipped a field that gave false comfort.
+
 ## b. Multi-signer model
 
 ### Default: sequential append
@@ -1289,7 +1374,7 @@ against a configurable trust store, timestamp validation (§c.5), the
 appearance-digest check (§a.8), commitment reporting, **the signer category
 with its certificate-consistency and commitment-constraint checks (§a.11)**,
 the trust-anchor outcome, total parsing with the `unsupported` outcome (§a.1,
-§a.5) and the exclusion rule of §a.3. **Qualified** custody and **B-LT / B-LTA**
+§a.5), **the document boundary of §a.14**, and the exclusion rule of §a.3. **Qualified** custody and **B-LT / B-LTA**
 evidence are OPTIONAL: implementations omitting them MUST report such
 signatures as *"valid signature — qualified status not evaluated"*, never as
 invalid.
@@ -1355,6 +1440,15 @@ of them. Vendor extensions via a reverse-DNS namespace (§a.1).
   answered itself once the input was written down: it is the same
   canonicalisation a signature uses, so there was never a second rule to
   invent.
+- ~~**A signature covers a prefix, and nothing bounds the document**~~ —
+  **resolved** (§a.14, v1.6). The document ends at its last block; bytes after it
+  make it non-conforming and a verifier must say `invalid`. The instinctive
+  remedy — a signed length or digest field — was considered and rejected: the
+  appended bytes lie outside the content such a field would describe, so it would
+  have matched anyway. A boundary is a property of the document, not of a block,
+  and a signed field that appears to cover something it does not is worse than
+  an absent one. Raised by the Vecto Sign implementation, which measured it on
+  both sides before reporting it.
 - **`revocation-info`** — the B-LT field is reserved, unreachable for short-lived
   certificates, and only worth specifying for deployments issuing long-lived
   ones.

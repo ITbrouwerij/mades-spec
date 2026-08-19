@@ -20,24 +20,6 @@ Either party may terminate with 30 days written notice.
 
 ---
 
-<!-- mades-sig
-# ✓ Signed by jane.doe@acme.example — approval — human — 2026-08-14
-version: 5
-algorithm: ecdsa-p256
-signer: jane.doe@acme.example
-signer-kind: human
-commitment: approval
-signed-at: 2026-08-14T14:30:00+02:00
-lang: en
-certificate-chain:
-  - MIIBkTCCATegAwIBAgIUY2hlY2sgdGhpcyBpcyBhbiBleGFtcGxl…
-  - MIIB3jCCAYSgAwIBAgIUZXhhbXBsZSBpc3N1aW5nIGF1dGhvcml0…
-timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxDzANBglghkgBZQMEAgEFAD…
-signature: MEUCIQDf4Xk2mQ8vRr1pLbYcT7wZ9nKjHgFsEaVuOxNdPqWiCg…
--->
-
----
-
 ## What this example demonstrates
 
 - **The block is an HTML comment, not a fence.** Open this file in any Markdown
@@ -59,3 +41,21 @@ signature: MEUCIQDf4Xk2mQ8vRr1pLbYcT7wZ9nKjHgFsEaVuOxNdPqWiCg…
 > ⚠️ The base64 values above are illustrative and truncated. This is a
 > documentation example, not a verifiable document — see
 > [`reference/`](../reference/) to produce a real one.
+
+---
+
+<!-- mades-sig
+# ✓ Signed by jane.doe@acme.example — approval — human — 2026-08-14
+version: 5
+algorithm: ecdsa-p256
+signer: jane.doe@acme.example
+signer-kind: human
+commitment: approval
+signed-at: 2026-08-14T14:30:00+02:00
+lang: en
+certificate-chain:
+  - MIIBkTCCATegAwIBAgIUY2hlY2sgdGhpcyBpcyBhbiBleGFtcGxl…
+  - MIIB3jCCAYSgAwIBAgIUZXhhbXBsZSBpc3N1aW5nIGF1dGhvcml0…
+timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxDzANBglghkgBZQMEAgEFAD…
+signature: MEUCIQDf4Xk2mQ8vRr1pLbYcT7wZ9nKjHgFsEaVuOxNdPqWiCg…
+-->

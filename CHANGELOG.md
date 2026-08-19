@@ -9,6 +9,90 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.6 — 2026-08-19
+
+**A signed document now ends where its signature ends.**
+
+### The document boundary (§a.14)
+
+A signature covers the content **preceding** its block. There is no byte range,
+no length field and no content digest, so nothing in a block says how long the
+document was when it was signed. Text appended after the last block is therefore
+outside every signature by construction — every signature still verifies, and a
+clause nobody agreed to sits at the bottom of the file.
+
+Until this version nothing in the spec said a reader had to look.
+
+From v1.6: **a conforming document ends at the closing `-->` of its last block**,
+with at most one trailing line feed. Anything else is non-conforming, and a
+verifier **MUST** report it as `invalid` — not as a warning next to a valid
+signature. A warning beside a green result reads as a detail; it is not one, and
+leaving the severity to the implementation means the property cannot be held
+against a counterparty.
+
+### Why not a signed length or digest
+
+That is the first remedy anyone proposes, and it does not work. Appended bytes
+sit *after* the block, so they are not part of the canonicalised content such a
+field would describe: the digest still matches, the length still matches, the
+clause is still there. A length over the *whole* document is impossible — the
+block contains the signature, so it cannot be inside its own digest — and with
+sequential signatures the problem simply moves, because block N+1 covers up to
+itself and after the last block there is again nothing.
+
+Specifying that field would have shipped a signed value that looks as though it
+covers the document and does not. There is a test in the reference suite that
+pins this down: `canonicalize()` returns byte-identical output before and after
+appending.
+
+### What it costs
+
+**Nothing that is already signed.** No signing input, no canonicalisation and no
+field changed. The block version stays `5`; every signature made under v1.5 or
+earlier remains valid under v1.6 and is simply read more strictly. The check
+needs no keys — whether a document ends at its last block is visible in the bytes.
+
+### eIDAS Article 26
+
+Of the four requirements in Article 26, (d) — any subsequent change to the signed
+data is detectable — was the one this format did not meet. The gap was never in
+the cryptography or the PKI beneath it; it was that the format placed no limit on
+what could follow the signature. Both neighbouring formats already close it, and
+neither needed a new field: PAdES covers the entire file, XAdES carries a
+`ds:Reference` per data object.
+
+### Reference implementation
+
+- `trailingContent(content)` in `mades-canon.mjs` — the bytes after the last
+  block, or `''`.
+- `mades-verify.mjs` reports them **first** and as a failure (exit 1), before any
+  per-block result.
+- Six tests in `reference/test/`, including the two that state the finding rather
+  than the fix: the signing input is unchanged by appending, and so is the
+  canonicalised content.
+
+### The examples had to move
+
+`examples/01` through `04` carried their "What this example demonstrates" section
+**after** the block. Under §a.14 that makes them non-conforming — the first thing
+an implementer reads would have been a violation of the rule two sections up. The
+explanation now sits before the block and the files end at their closing `-->`.
+
+Examples 05, 06 and 07 already ended at the block and are untouched.
+
+### Credit
+
+Raised by the **Vecto Sign** implementation on 2026-08-19, out of an independent
+conformity assessment, measured on both a v1.5 reference run and their own
+verifier before being reported. The remedy adopted here is not the one that was
+proposed — see above — but the finding was exact, and the proposed alternative
+would have shipped a field that gave false comfort.
+
+The README also carried `v1.4` in its header since the v1.5 release; corrected
+here. That is the second copy this project keeps proving it should not have.
+
+---
+
 ## v1.5 — 2026-08-19
 
 **A signature can name the files that ride along, and a document can be kept

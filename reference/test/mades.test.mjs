@@ -17,6 +17,7 @@ import { describe, it } from 'node:test';
 
 import {
   normalize, findBlocks, parseBlockBody, signingInputForBlock, serializeBlock, rulesFor, canonicalize,
+  trailingContent,
 } from '../mades-canon.mjs';
 
 const REAL = new URL('../../examples/05-a-real-signed-document.md', import.meta.url);
@@ -521,3 +522,55 @@ describe('§a.5 a line that cannot be placed is reported, never dropped', () => 
   });
 });
 
+// ---------------------------------------------------------------------------
+
+describe('the document boundary (§a.14)', () => {
+  const worked = readFileSync(WORKED, 'utf8');
+
+  it('a document that ends at its last block has no trailing content', () => {
+    assert.equal(trailingContent(worked), '');
+  });
+
+  it('one trailing line feed is allowed and is not content', () => {
+    // Text editors add one. It carries nothing and reporting it would train
+    // readers to ignore this check.
+    assert.equal(trailingContent(worked.replace(/\n*$/, '') + '\n'), '');
+    assert.equal(trailingContent(worked.replace(/\n*$/, '')), '');
+  });
+
+  it('text appended after the last block IS reported', () => {
+    // THE CASE THIS SECTION EXISTS FOR. Every signature below still verifies —
+    // the clause sits outside the content any of them covers — so without this
+    // check a conforming verifier reports the document as sound.
+    const aangevuld =
+      worked + '\n## Additional clause\n\nThe client shall further pay EUR 50,000.\n';
+    const staart = trailingContent(aangevuld);
+    assert.notEqual(staart, '');
+    assert.match(staart, /50,000/);
+  });
+
+  it('the signature over the untouched prefix still verifies — that is the point', () => {
+    // If this ever fails, the finding has changed shape: the appended text
+    // would then be detectable by the signature itself and §a.14 would be
+    // redundant. It is not, and this test says so out loud.
+    const aangevuld = worked + '\n## Additional clause\n';
+    const a = signingInputForBlock(worked, 0).signingInput;
+    const b = signingInputForBlock(aangevuld, 0).signingInput;
+    assert.equal(a, b, 'appending after the block does not change what was signed');
+  });
+
+  it('a signed length or digest over the content would not have caught it', () => {
+    // The remedy proposed when this was reported. The canonicalised content up
+    // to the block is byte-for-byte the same before and after appending, so a
+    // field describing it matches either way — a signed field that looks as
+    // though it covers the document and does not.
+    const aangevuld = worked + '\n## Additional clause\n';
+    assert.equal(canonicalize(worked, 0), canonicalize(aangevuld, 0));
+  });
+
+  it('an unsigned document has no boundary to report', () => {
+    // No blocks means nothing is covered at all; that is a different finding
+    // and belongs to the caller, not here.
+    assert.equal(trailingContent('just some text\n'), '');
+  });
+});

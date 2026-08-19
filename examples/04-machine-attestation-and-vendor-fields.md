@@ -20,27 +20,6 @@ dependency tree at build time.
 
 ---
 
-<!-- mades-sig
-# ✓ Signed by ci@acme.example — creation — automated — 2026-08-14
-version: 5
-algorithm: ecdsa-p256
-signer: ci@acme.example
-signer-kind: automated
-automation: ci-pipeline
-commitment: creation
-signed-at: 2026-08-14T03:12:44Z
-lang: en
-build.acme.pipeline-run: 4821
-build.acme.source-commit: 9f4e2b8
-certificate-chain:
-  - MIIBkTCCATegAwIBAgIUY2kgYXQgYWNtZSBleGFtcGxlIGJ1aWxk…
-  - MIIB3jCCAYSgAwIBAgIUZXhhbXBsZSBpc3N1aW5nIGF1dGhvcml0…
-timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxDzANBglghkgBZQMEAgEFAD…
-signature: MEQCIBqZ7XnRw2LmKdVeC5oPtYfHg8sJa1UxNbEiOrPvWkCmAg…
--->
-
----
-
 ## What this example demonstrates
 
 ### `signer-kind: automated` — the question PAdES never had to ask
@@ -87,3 +66,24 @@ parameters become de facto standards anyway, and then the deployed world carries
 both spellings forever. The namespace says the same thing without the trap.
 
 > ⚠️ Base64 values are illustrative and truncated.
+
+---
+
+<!-- mades-sig
+# ✓ Signed by ci@acme.example — creation — automated — 2026-08-14
+version: 5
+algorithm: ecdsa-p256
+signer: ci@acme.example
+signer-kind: automated
+automation: ci-pipeline
+commitment: creation
+signed-at: 2026-08-14T03:12:44Z
+lang: en
+build.acme.pipeline-run: 4821
+build.acme.source-commit: 9f4e2b8
+certificate-chain:
+  - MIIBkTCCATegAwIBAgIUY2kgYXQgYWNtZSBleGFtcGxlIGJ1aWxk…
+  - MIIB3jCCAYSgAwIBAgIUZXhhbXBsZSBpc3N1aW5nIGF1dGhvcml0…
+timestamp: MIAGCSqGSIb3DQEHAqCAMIACAQMxDzANBglghkgBZQMEAgEFAD…
+signature: MEQCIBqZ7XnRw2LmKdVeC5oPtYfHg8sJa1UxNbEiOrPvWkCmAg…
+-->

@@ -10,6 +10,23 @@ This is the MAdES analogue of a DocuSign / Adobe Sign template: declarative sign
 
 ---
 
+## Document status
+
+This document is **partially signed**: the `drafting` and `review` stages have completed (all required fields filled). The `signoff` stage is now open and awaiting `ceo-approval`. Once that signature is appended, the document is considered fully signed under its declared workflow.
+
+Note that the `technical-review` field in the `review` stage was declared `required: false`, so its absence does not block stage progression.
+
+## What this example demonstrates
+
+- **Three-stage workflow**: drafting → review → signoff. Each stage opens only when the prior stage's required fields are complete.
+- **Mode mixing**: `drafting` is `serial` (Alice signs before Carol), `review` is `parallel` (David and Eva sign in any order).
+- **Required vs optional fields**: `technical-review` is optional; the document can progress to `signoff` without it.
+- **Field-id binding**: each `<!-- mades-sig -->` block references its declared field via `field: <id>`. Signers cannot fill fields that aren't declared, and (per MAdES rules) cannot double-fill a single-occupancy field.
+- **Self-describing workflow status**: the document itself is the canonical state. A workflow engine reading this file can determine "stage `signoff` is now open, awaiting signer for field `ceo-approval`" — no external workflow database needed. The file is the truth.
+- **Workflow engine is a separate concern**: MAdES declares the shape of the workflow; an orchestration engine (sending invitations, reminders, dashboard) reads the declaration and drives signers through it. Out of scope for the spec itself.
+
+---
+
 <!-- mades-sig-fields
 stages:
   - id: drafting
@@ -123,20 +140,3 @@ field: security-review
 key-id: https://keys.acme.example/eva@acme.example.json#current
 signature: evac2lnbmF0dXJlcGxhY2Vob2xkZXJ2YWx1ZWhlcmU…
 -->
-
----
-
-## Document status
-
-This document is **partially signed**: the `drafting` and `review` stages have completed (all required fields filled). The `signoff` stage is now open and awaiting `ceo-approval`. Once that signature is appended, the document is considered fully signed under its declared workflow.
-
-Note that the `technical-review` field in the `review` stage was declared `required: false`, so its absence does not block stage progression.
-
-## What this example demonstrates
-
-- **Three-stage workflow**: drafting → review → signoff. Each stage opens only when the prior stage's required fields are complete.
-- **Mode mixing**: `drafting` is `serial` (Alice signs before Carol), `review` is `parallel` (David and Eva sign in any order).
-- **Required vs optional fields**: `technical-review` is optional; the document can progress to `signoff` without it.
-- **Field-id binding**: each `<!-- mades-sig -->` block references its declared field via `field: <id>`. Signers cannot fill fields that aren't declared, and (per MAdES rules) cannot double-fill a single-occupancy field.
-- **Self-describing workflow status**: the document itself is the canonical state. A workflow engine reading this file can determine "stage `signoff` is now open, awaiting signer for field `ceo-approval`" — no external workflow database needed. The file is the truth.
-- **Workflow engine is a separate concern**: MAdES declares the shape of the workflow; an orchestration engine (sending invitations, reminders, dashboard) reads the declaration and drives signers through it. Out of scope for the spec itself.

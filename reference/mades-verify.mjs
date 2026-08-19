@@ -20,7 +20,12 @@
 import { createVerify, createPublicKey, verify as verifyRaw, X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-import { findBlocks, parseBlockBody, signingInputForBlock } from './mades-canon.mjs';
+import {
+  findBlocks,
+  parseBlockBody,
+  signingInputForBlock,
+  trailingContent,
+} from './mades-canon.mjs';
 
 const KNOWN_FIELDS = new Set([
   'version', 'algorithm', 'signer', 'signer-kind', 'automation', 'commitment',
@@ -72,6 +77,23 @@ console.log(`${C.bold}${file}${C.reset} ${C.dim}— ${Buffer.byteLength(document
 if (blocks.length === 0) {
   console.log('  no signature block — this document is unsigned.');
   process.exit(1);
+}
+
+// THE DOCUMENT BOUNDARY, BEFORE ANY SIGNATURE (§a.14).
+//
+// A signature covers the content PRECEDING its block, so bytes after the last
+// block are outside every signature by construction. Every signature below can
+// verify perfectly while a clause nobody signed sits at the bottom of the file.
+//
+// It is reported FIRST and as a FAILURE, not as a note beside a green result. A
+// warning next to "1 signature verifies" is read as a detail; it is not one.
+const staart = trailingContent(document);
+if (staart) {
+  const regels = staart.split('\n').filter((r) => r.trim() !== '');
+  bad(`${Buffer.byteLength(staart)} byte(s) after the last block — outside every signature (§a.14)`);
+  for (const r of regels.slice(0, 3)) info('', `${C.red}${r.slice(0, 72)}${C.reset}`);
+  if (regels.length > 3) info('', `${C.dim}… ${regels.length - 3} more line(s)${C.reset}`);
+  console.log('');
 }
 
 for (let i = 0; i < blocks.length; i++) {
