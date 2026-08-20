@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.8 (frozen — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
+> **Status:** Specification · **Version:** 1.8 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -75,12 +75,15 @@ make an existing signed document read differently (wire breakage), **MINOR** for
 additive or behaviour-widening change, **PATCH** for editorial work that changes
 no behaviour.
 
-**v1.8 is a freeze release.** Until at least **2027-03-01** the normative
-content changes only for a security-critical erratum — a defect that lets a
-tampered document verify, or a valid one read as forged. Everything else queues.
-Editorial corrections may ship as PATCH releases; they change no behaviour by
-definition, and a diff that says otherwise is a bug in the release, not in the
-rule.
+**v1.8 is a stability release.** From here this specification is treated as
+stable: normative change requires a demonstrated defect — foremost one that
+lets a tampered document verify, or a valid one read as forged — not an idea
+for an improvement. Improvements queue under Open decisions until enough of
+them justify a deliberate release. No end date is promised, in either
+direction: a date would either force a release nobody needs or forbid a fix
+somebody does. What is promised is the bar. Editorial corrections may ship as
+PATCH releases; they change no behaviour by definition, and a diff that says
+otherwise is a bug in the release, not in the rule.
 
 The week of 2026-08-13 to 2026-08-20 produced five releases. That was first
 contact: three independent implementations went live against this text at once,
@@ -1509,7 +1512,7 @@ authored at a desk. The changelog credits each at its release.
 ## Open decisions
 
 Resolved questions moved to [CHANGELOG.md](CHANGELOG.md) with their release;
-this list is only what is genuinely open. None of it blocks the freeze (§0.2):
+this list is only what is genuinely open. None of it touches stability (§0.2):
 each item is additive, and each says what unblocks it.
 
 - **The v5 category vectors** (§e) — five cases including a negative one. Needs

@@ -11,13 +11,15 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ## v1.8 — 2026-08-20
 
-**The freeze release: the spec becomes dossier-grade and then stops moving.**
+**The stability release: the spec becomes dossier-grade and stops moving without cause.**
 
 Five releases in one week was first contact — three implementations went live
 against this text at once, and every divergence was repaired here rather than in
-one of them. This release ends that phase deliberately: §0.2 freezes normative
-content until at least **2027-03-01** (security-critical errata excepted,
-editorial as PATCH), and states the algorithm-agility policy — the §c.1
+one of them. This release ends that phase deliberately: §0.2 declares the spec
+stable — normative change now requires a demonstrated defect, not an idea for
+an improvement; improvements queue under Open decisions. Deliberately no end
+date: a date would either force a release nobody needs or forbid a fix somebody
+does. The bar is the promise. It also states the algorithm-agility policy — the §c.1
 allowlist gains entries in MINOR releases and never loses one; aging algorithms
 are marked *not for new signatures* and existing documents are carried by
 archive timestamps (§a.13).
