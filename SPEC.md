@@ -1316,6 +1316,11 @@ carry is asserting, not showing.
   a `covers` list, and a damaged layer where the layer breaks and the
   signature beneath it does not.
 
+The v4 and v5 files are **recordings**: their document content is whatever was
+actually signed, including non-English text. A recording is evidence — the
+tokens and signatures cover those exact bytes, so translating them would break
+every case. What a vector pins is bytes, not language.
+
 **Still to publish** — the v5 *category* cases (§a.11): human, automated, an
 automated `creation` under a human `approval`, a certificate/category mismatch
 expected `invalid`, and a v4 block read by a v5 verifier. They need a throwaway
