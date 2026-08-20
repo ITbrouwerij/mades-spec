@@ -1,5 +1,5 @@
 {
-  "$schema": "https://vecto.build/schemas/mades-vectors-1.json",
+  "$schema": "https://raw.githubusercontent.com/ITbrouwerij/mades-spec/main/vectors/mades-vectors-1.schema.json",
   "spec": "MAdES — archive timestamps (§a.13)",
   "blockVersion": 5,
   "generatedFrom": "a development TSA (RFC 3161), via src/signing/maakLtaVectoren.mjs",

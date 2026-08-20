@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml/badge.svg)](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml)
 
-> **Specification v1.8 (stable, §0.2)** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
+> **Specification v1.8.1 (stable, §0.2)** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
 >
 > An open specification for signing Markdown. Not the documentation of any one
 > product — a conforming implementation must be able to succeed knowing nothing
@@ -224,7 +224,10 @@ document boundary (§a.14), signed v4 and v5 documents, and archive layers
 (§a.13). An implementation compares against these files instead of against its
 own reading of the text — three implementations once read one sentence
 identically and identically wrongly, which is why a shared answer file exists.
-`reference/test/` re-verifies every vector on every run.
+`reference/test/` re-verifies every vector on every run. Each file names its
+shape in `mades-vectors-1.schema.json` and, where it carries a signing input,
+says whether that input is `base64` or `utf8` — do not infer it from the file
+you opened first.
 
 ## Status
 

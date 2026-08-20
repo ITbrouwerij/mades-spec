@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ITbrouwerij/mades-spec/main/vectors/mades-vectors-1.schema.json",
+  "title": "MAdES interoperability vectors, envelope 1",
+  "description": "The shape shared by every file in vectors/. Until v1.8.1 these files declared a $schema that did not exist, on a product domain, and nothing in the data said how signingInput was encoded — two files answered that question differently and a second implementation had to guess. The envelope is deliberately loose about case shape, which differs per rule, and strict about the two things a consumer cannot infer: which specification version a file records, and how its bytes are encoded.",
+  "type": "object",
+  "required": ["$schema", "spec", "note", "cases"],
+  "properties": {
+    "$schema": {
+      "description": "This schema. A vector file that points at a schema which does not resolve is worse than one that points at none: it looks described.",
+      "type": "string",
+      "format": "uri"
+    },
+    "spec": { "type": "string", "minLength": 1 },
+    "specVersion": {
+      "description": "The specification version this file records, for files that pin a document-level rule.",
+      "type": "string",
+      "pattern": "^[0-9]+\.[0-9]+(\.[0-9]+)?$"
+    },
+    "blockVersion": {
+      "description": "The block `version:` these cases carry. Independent of specVersion (§0.2).",
+      "type": "integer",
+      "minimum": 1
+    },
+    "signingInputEncoding": {
+      "description": "REQUIRED whenever any case carries `signingInput`. `base64` means the field holds base64 of the UTF-8 signing input and MUST be decoded before use; `utf8` means it holds the signing input itself. Both occur: these files are recordings, and a recording is not re-encoded to tidy it up.",
+      "enum": ["base64", "utf8"]
+    },
+    "generatedFrom": { "type": "string" },
+    "note": { "type": "string", "minLength": 1 },
+    "rules": { "type": "string" },
+    "key": { "type": "object" },
+    "trustRootPem": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "note": { "type": "string" },
+          "signingInput": { "type": "string" }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "cases": { "type": "array", "contains": { "required": ["signingInput"] } }
+        },
+        "required": ["cases"]
+      },
+      "then": { "required": ["signingInputEncoding"] }
+    }
+  ]
+}

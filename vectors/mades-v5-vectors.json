@@ -1,7 +1,8 @@
 {
-  "$schema": "https://vecto.build/schemas/mades-vectors-1.json",
+  "$schema": "https://raw.githubusercontent.com/ITbrouwerij/mades-spec/main/vectors/mades-vectors-1.schema.json",
   "spec": "MAdES — Markdown Advanced Electronic Signatures",
   "blockVersion": 5,
+  "signingInputEncoding": "utf8",
   "generatedFrom": "a REAL ceremony on an acceptance environment, 2026-08-13",
   "note": "Unlike the v2 and v4 vectors this is NOT a throwaway key but a genuine signature, set by a remote signing service with a certificate from a test issuing CA. Deliberate: v5 went into use with no vector covering it, and the first full end-to-end walk found the verifier checking the wrong source. A self-invented case would mostly have proven that one author's writer and reader agree.",
   "rules": [

@@ -9,6 +9,27 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.8.1 — 2026-08-20
+
+**The published vectors describe themselves.** No normative change; the first
+PATCH under the §0.2 rule.
+
+- `vectors/mades-vectors-1.schema.json` is published. Every vector file
+  declared a `$schema` on a product domain that returned 404 — described in
+  appearance only.
+- A file carrying `signingInput` now declares `signingInputEncoding`. The v4
+  file records base64 and the v5 file records raw text; the difference was
+  stated once, in §e prose, and nowhere in the data. A second implementation
+  hit it within days.
+- The recordings themselves are unchanged. Re-encoding them for uniformity was
+  the obvious fix and the wrong one: it would break readers already consuming
+  them, to tidy evidence.
+- `reference/test/vectors.test.mjs` reads the declaration instead of hard-coding
+  it, and checks that every declared schema resolves to a file in this
+  repository. 104/104.
+
+---
+
 ## v1.8 — 2026-08-20
 
 **The stability release: the spec becomes dossier-grade and stops moving without cause.**

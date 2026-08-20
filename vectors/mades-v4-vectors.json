@@ -1,7 +1,8 @@
 {
-  "$schema": "https://vecto.build/schemas/mades-vectors-1.json",
+  "$schema": "https://raw.githubusercontent.com/ITbrouwerij/mades-spec/main/vectors/mades-vectors-1.schema.json",
   "spec": "MAdES — Markdown Advanced Electronic Signatures",
   "blockVersion": 4,
+  "signingInputEncoding": "base64",
   "generatedFrom": "the reference signing path of the first implementation, with a throwaway key",
   "note": "Signed with a THROWAWAY key, not a certificate. What a second implementation needs to check is the construction of the signing input, and that does not depend on who holds the key. The signingInput field is base64 of the exact UTF-8 bytes that were signed.",
   "rules": [

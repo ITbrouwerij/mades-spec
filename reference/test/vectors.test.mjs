@@ -19,7 +19,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { createHash, createPublicKey, verify as verifyRaw, X509Certificate } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
@@ -31,6 +31,20 @@ import {
 
 const vec = (name) =>
   JSON.parse(readFileSync(new URL(`../../vectors/${name}`, import.meta.url), 'utf8'));
+
+/**
+ * The signing input of one case, decoded according to what the FILE declares.
+ *
+ * Reading `signingInput` without consulting `signingInputEncoding` works for
+ * whichever file the reader happened to open first and fails on the other.
+ */
+const decodeSigningInput = (file, testCase) => {
+  const encoding = file.signingInputEncoding;
+  assert.ok(encoding, 'the file does not declare signingInputEncoding');
+  return encoding === 'base64'
+    ? Buffer.from(testCase.signingInput, 'base64').toString('utf8')
+    : testCase.signingInput;
+};
 
 // ---------------------------------------------------------------------------
 
@@ -79,10 +93,10 @@ describe('v4 vectors — signing-input reconstruction and signatures', () => {
     it(c.name, () => {
       const blocks = findBlocks(c.document);
       assert.ok(blocks.length >= 1, 'no block found');
-      // The v4 file stores the signing input as BASE64 — multi-byte characters
-      // and the em-dashes in the comment line survive a JSON round-trip that
-      // way. The derived input is compared against the DECODED bytes.
-      const recorded = Buffer.from(c.signingInput, 'base64').toString('utf8');
+      // The file SAYS how its signing input is encoded (v1.8.1). This was
+      // hard-coded as "v4 is base64" — correct, and unavailable to anyone who
+      // had not read this file. A second implementer hit it within days.
+      const recorded = decodeSigningInput(v4, c);
       // The LAST block is the one the vector records; earlier ones are what a
       // counter-signature case counters.
       const derived = signingInputForBlock(c.document, blocks.length - 1);
@@ -109,9 +123,10 @@ describe('v5 vector — a real ceremony, reconstructed from the file alone', () 
       const blocks = findBlocks(c.document);
       const derived = signingInputForBlock(c.document, blocks.length - 1);
       assert.equal(derived.unparsed.length, 0);
-      assert.equal(derived.signingInput, c.signingInput, 'signing input drifted');
+      const recorded = decodeSigningInput(v5, c);
+      assert.equal(derived.signingInput, recorded, 'signing input drifted');
       assert.equal(
-        createHash('sha256').update(c.signingInput, 'utf8').digest('base64'),
+        createHash('sha256').update(recorded, 'utf8').digest('base64'),
         c.signedDigestB64,
         'the digest the service signed is not the digest of this input'
       );
@@ -140,6 +155,43 @@ describe('archive-layer vectors (§a.13)', () => {
       assert.equal(sigs.length, c.expect.signatures, 'signature count');
       assert.equal(layers.length, c.expect.layers.length, 'layer count');
       assert.equal(trailingContent(c.document), '', 'a layered document still ends at its last block');
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+
+describe('the vector files describe themselves (§e)', () => {
+  const ALL = [
+    'canonicalisation-vectors.json',
+    'boundary-vectors.json',
+    'mades-v4-vectors.json',
+    'mades-v5-vectors.json',
+    'mades-lta-vectors.json',
+  ];
+
+  for (const name of ALL) {
+    describe(name, () => {
+      const file = vec(name);
+
+      it('declares a schema that exists in this repository', () => {
+        // The declared schema was a URL on a product domain that returned 404
+        // for two releases. A file that points at a schema which does not
+        // resolve is worse than one that points at none: it looks described.
+        const tail = file.$schema.split('/').slice(-2).join('/');
+        assert.ok(
+          existsSync(new URL(`../../${tail}`, import.meta.url)),
+          `${file.$schema} does not resolve to a file here`
+        );
+      });
+
+      it('declares how its signing input is encoded, if it carries one', () => {
+        if (!file.cases.some((c) => 'signingInput' in c)) return;
+        assert.ok(
+          ['base64', 'utf8'].includes(file.signingInputEncoding),
+          'a consumer would have to guess, and two files answer differently'
+        );
+      });
     });
   }
 });

@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.8 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
+> **Status:** Specification · **Version:** 1.8.1 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -1301,8 +1301,8 @@ carry is asserting, not showing.
   agreement between implementations was no evidence, since it came from the
   same sentence. Implementations SHOULD compare against this file rather than
   against their own reading of the text.
-- **`mades-v4-vectors.json`** — four signed documents with signing input
-  (base64), digest and signature, plus the throwaway key that signed them:
+- **`mades-v4-vectors.json`** — four signed documents with signing input,
+  digest and signature, plus the throwaway key that signed them:
   minimal, a vendor field, a counter-signature, and a `timestamp` field shown
   to fall outside the signing input.
 - **`mades-v5-vectors.json`** — one **real ceremony**: a genuine certificate
@@ -1315,6 +1315,25 @@ carry is asserting, not showing.
   (the second covering the first), a layer over three signatures, a layer over
   a `covers` list, and a damaged layer where the layer breaks and the
   signature beneath it does not.
+
+**Every file declares its own shape** *(v1.8.1)*. `$schema` names
+`mades-vectors-1.schema.json`, published beside them here, and a file carrying
+`signingInput` MUST declare `signingInputEncoding` — `base64` or `utf8`. Both
+values occur, and that is not tidied away below.
+
+> **What this corrects.** The v4 file records its signing input as base64 and
+> the v5 file records it raw, and nothing in either file said so: the encoding
+> was stated once, in prose, in this section. Every file also declared a
+> `$schema` on a product domain that returned 404. A second implementation hit
+> this within days of the vectors being published — the failure mode the files
+> exist to prevent, reproduced by the files themselves.
+>
+> **The recordings were not re-encoded to make them uniform**, which was the
+> obvious fix and the wrong one. These files are evidence; re-encoding evidence
+> to tidy it breaks every consumer already reading it, and buys consistency in
+> the one place where being able to say what actually happened matters more.
+> The declaration is additive, so existing readers keep working and new ones
+> stop guessing.
 
 The v4 and v5 files are **recordings**: their document content is whatever was
 actually signed, including non-English text. A recording is evidence — the

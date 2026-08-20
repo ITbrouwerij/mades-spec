@@ -1,5 +1,5 @@
 {
-  "$schema": "https://vecto.build/schemas/mades-vectors-1.json",
+  "$schema": "https://raw.githubusercontent.com/ITbrouwerij/mades-spec/main/vectors/mades-vectors-1.schema.json",
   "spec": "MAdES — canonicalisation of content (§a.2)",
   "specVersion": "1.8",
   "note": "Input, expected canonical form and expected sha256 digest, per §a.2. These are the cases where two implementations silently diverge: an implementation whose canonical form differs on ANY of these will compute different signing inputs and report valid signatures as invalid — with no diagnostic. Generated with the reference implementation; the simple cases are checkable by hand.",

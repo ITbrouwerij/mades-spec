@@ -1,5 +1,5 @@
 {
-  "$schema": "https://vecto.build/schemas/mades-vectors-1.json",
+  "$schema": "https://raw.githubusercontent.com/ITbrouwerij/mades-spec/main/vectors/mades-vectors-1.schema.json",
   "spec": "MAdES — the document boundary (§a.14)",
   "specVersion": "1.8",
   "note": "Conforming and non-conforming documents under §a.14 as of v1.7: a document ends at the closing --> of its last block, with at most one trailing line ending (LF, CRLF or a lone CR). These exist because three independent implementations read v1.6 identically and identically wrongly — agreement between implementations was no evidence, since it came from the same sentence. A shared answer file is the fix: implementations compare against these cases instead of against their own reading. The last case pins the §a.13/§a.14 interplay: an archive-timestamp block is a block, and a boundary check that does not recognise its marker reports a valid archive layer as tampering.",
