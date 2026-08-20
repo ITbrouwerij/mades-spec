@@ -1,0 +1,93 @@
+{
+  "$schema": "https://vecto.build/schemas/mades-vectors-1.json",
+  "spec": "MAdES — canonicalisation of content (§a.2)",
+  "specVersion": "1.8",
+  "note": "Input, expected canonical form and expected sha256 digest, per §a.2. These are the cases where two implementations silently diverge: an implementation whose canonical form differs on ANY of these will compute different signing inputs and report valid signatures as invalid — with no diagnostic. Generated with the reference implementation; the simple cases are checkable by hand.",
+  "rules": [
+    "Strip a leading UTF-8 BOM.",
+    "CRLF and lone CR become LF.",
+    "Strip trailing spaces and tabs from every line.",
+    "Exactly one trailing newline; empty content stays empty.",
+    "Everything else is byte-for-byte untouched — leading blank lines and leading whitespace are significant."
+  ],
+  "cases": [
+    {
+      "name": "plain LF text",
+      "input": "Hello\nworld\n",
+      "canonical": "Hello\nworld\n",
+      "digest": "sha256:e0bfbb0c2d280fc86313ac988e6b5315d2a57844335cf62146b65b6a62820775"
+    },
+    {
+      "name": "CRLF normalises to LF",
+      "input": "Hello\r\nworld\r\n",
+      "canonical": "Hello\nworld\n",
+      "digest": "sha256:e0bfbb0c2d280fc86313ac988e6b5315d2a57844335cf62146b65b6a62820775"
+    },
+    {
+      "name": "lone CR normalises to LF",
+      "input": "Hello\rworld\r",
+      "canonical": "Hello\nworld\n",
+      "digest": "sha256:e0bfbb0c2d280fc86313ac988e6b5315d2a57844335cf62146b65b6a62820775"
+    },
+    {
+      "name": "UTF-8 BOM is stripped",
+      "input": "﻿Hello\nworld\n",
+      "canonical": "Hello\nworld\n",
+      "digest": "sha256:e0bfbb0c2d280fc86313ac988e6b5315d2a57844335cf62146b65b6a62820775"
+    },
+    {
+      "name": "trailing spaces and tabs stripped per line",
+      "input": "Hello  \nworld\t\n",
+      "canonical": "Hello\nworld\n",
+      "digest": "sha256:e0bfbb0c2d280fc86313ac988e6b5315d2a57844335cf62146b65b6a62820775"
+    },
+    {
+      "name": "multiple trailing newlines collapse to one",
+      "input": "Hello\nworld\n\n\n",
+      "canonical": "Hello\nworld\n",
+      "digest": "sha256:e0bfbb0c2d280fc86313ac988e6b5315d2a57844335cf62146b65b6a62820775"
+    },
+    {
+      "name": "no trailing newline gains exactly one",
+      "input": "Hello\nworld",
+      "canonical": "Hello\nworld\n",
+      "digest": "sha256:e0bfbb0c2d280fc86313ac988e6b5315d2a57844335cf62146b65b6a62820775"
+    },
+    {
+      "name": "LEADING blank lines are significant",
+      "input": "\n\nHello\n",
+      "canonical": "\n\nHello\n",
+      "digest": "sha256:9651843b1c85232ed2b2e1871598fb7ec16c6b462e9836f5659bdbb2f86bdae0"
+    },
+    {
+      "name": "leading whitespace is significant",
+      "input": "  indented\n",
+      "canonical": "  indented\n",
+      "digest": "sha256:25c32f97996dce00e1b52e726b6b6e77c50d288f5db12a2026cfd9aee8499718"
+    },
+    {
+      "name": "interior blank lines are significant",
+      "input": "a\n\n\nb\n",
+      "canonical": "a\n\n\nb\n",
+      "digest": "sha256:ebbfa3d605b9dd23739e36d89f299a2906608cde597a866dc890dd6816af3d7a"
+    },
+    {
+      "name": "multi-byte characters untouched",
+      "input": "héllo — wörld ✓\n",
+      "canonical": "héllo — wörld ✓\n",
+      "digest": "sha256:b33ac0c5525da2099d254a770256bc1e6f7bb52eda034410d1fc3b2ece92a309"
+    },
+    {
+      "name": "empty content stays empty",
+      "input": "",
+      "canonical": "",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "only whitespace collapses to empty",
+      "input": "   \n\t\n",
+      "canonical": "",
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

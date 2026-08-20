@@ -1,10 +1,12 @@
-> **Status:** Specification · **Version:** 1.7 · **Block `version: 5`** · **Reference implementation:** Vecto OS (ITbrouwerij)
+> **Status:** Specification · **Version:** 1.8 (frozen — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
-> anyone can implement it. Vecto Proof is *a* consumer of this specification —
-> the first one, and the source of the reference implementation — but it holds
-> no privileged position in what follows.
+> anyone can implement it. The reference implementation and the
+> interoperability vectors live in this repository. Vecto Proof is *a* consumer
+> of this specification — the first of three, and where most of the findings
+> below were first measured — but it holds no privileged position in what
+> follows.
 >
 > The practical rule for anyone editing this document: it describes the
 > **format**, not how a product built on it chooses to work. How a given service
@@ -23,102 +25,27 @@
 > survives copy-paste, renders normally in any Markdown viewer, and verifies
 > offline from the file alone.
 >
-> **v1.2 changelog (2026-08-12) — who signed: a person, or a machine.** A reader
-> can no longer tell whether a document was reasoned about by a human or
-> produced in one pass by a model. Markdown is the format in which humans and
-> machines alternate, so this is the question MAdES is uniquely placed to
-> answer — and it is why MAdES is more than PAdES-for-text.
->
-> `version: 5` adds **`signer-kind`** (§a.11): required, closed, `human` or
-> `automated`, with an optional open `automation` refinement for *what kind* of
-> machine. One invariant carries the whole design:
->
-> > **`human` can only be established by a human signature.** An unrecognised
-> > value degrades to *not human* — never to `human`.
->
-> A self-declared field protects nothing, so the category is **anchored in the
-> certificate** and the verifier checks that both agree (§a.11.2); a mismatch is
-> `invalid`. Certificates MAY additionally constrain which commitments they can
-> carry, which is what lets a deployment issue machine certificates that can fix
-> a version but can never express agreement (§a.11.3).
->
-> Also clarified: **a machine attestation (§c.2) and an automated signature are
-> not the same thing.** Both are `automated`; only one is a signature. §c.2
-> carries the table, because an implementer reading it in isolation would
-> otherwise conflate them.
->
-> Blocks ≤ v4 report the category as **"unspecified (pre-v5)"** — `unsupported`
-> is not `invalid`, as always.
->
-> **v1.1 (2026-08-10) — the block says what it signs, and signs what it says.**
-> Two defects, found in opposite directions, both closed by one principle:
-> *parsing is total, and what is signed is written.*
->
-> Measured on the reference implementation before the change:
->
-> ```
-> a second comment line in the block    NOT covered by the signature
-> a bare text line in the block         NOT covered
-> a vendor field (outside the writer's list)   signed, NOT written back
-> ```
->
-> The first means `# WARNING: this contract has been declared void` could sit
-> **inside** a signature block without breaking the signature — and that block
-> is what a reader sees in a plain text editor, where such a line reads as part
-> of the signature. The third made any block carrying a vendor extension
-> permanently unverifiable: the field went into the digest and never into the
-> file.
->
-> `version: 4` states both rules normatively (§a.1, §a.3) and adds a verifier
-> obligation: a block containing a line the reader cannot parse is
-> **`unsupported`**, never `invalid` (§a.5). The distinction is the whole point —
-> *we cannot judge this* is not *someone tampered with this*.
->
-> **v2 and v3 blocks are read under the rules of THEIR version.** The `version`
-> field decides, so existing signatures do not break. Interoperability vectors
-> for v4 are published (§e).
->
-> **v1.0 (2026-08-07) — the signature block becomes invisible, and the
-> signature becomes visible.** Two changes, and they are the same change seen
-> from two sides.
->
-> A fenced code block cannot be hidden: rendering as a code block is what a
-> fence *means*. Every viewer that does not implement MAdES therefore showed
-> readers a wall of base64 where a signature should be. **The block moves to an
-> HTML comment** (§a.1), which every conforming renderer hides and which remains
-> plainly visible in the source. In its place, **a visible SVG appearance** —
-> the seal — is embedded as a data-URI image inside the signed content (§a.8).
->
-> This is deliberately the PDF anatomy: an appearance you can see, a signature
-> you cannot, and validity reported by the verifier rather than claimed by the
-> picture. Because the appearance sits inside the signing input, swapping it
-> breaks the signature; that is what makes it safe to render at all.
->
-> `version: 3`. v2 signatures do not verify under v3 rules and are not expected
-> to. Also new: `lang` (§a.9), and a normative ban on `--` inside the block
-> (§a.1) — it would close the comment early and silently turn a signed document
-> into an unsigned one.
->
-> **v1.5** — two additions and one resolution. `covers` (§a.12): a signature can
-> name the files that ride along with the signed text, additive.
-> `archive-timestamp` is **specified and relocated** (§a.13): it becomes its own
-> block, `mades-archive-ts`, covering the whole document rather than a reserved
-> field inside a signature block — which closes the open question of what it
-> covers, and makes renewal an ordinary append rather than an exception to §b.
-> Reference fix in the same release: a line that could not be placed in an
-> already-opened container was silently discarded instead of reported, so a
-> block could receive a verdict over content the reader had not fully read.
-> It now reaches `unparsed`, and §a.5 makes such a block `unsupported`.
-> **v0.9** — corrected "B-T is the ceiling": B-LT is unreachable for short-lived
-> certificates but **B-LTA is not**, since archive timestamps rest on the
-> timestamp chain rather than on revocation data (§g). Nonce comparison made
-> normative (§c.5).
-> **v0.8** — trust is a property of the verifier, not of the document (§c.4).
-> **v0.7** — exclusion rule generalised (§a.3).
-> **v0.6** — signing input covers the block's own metadata; `represents`;
-> `revision`/`supersedes`.
-> **v0.4** — asymmetric-only personal signatures; HMAC demoted to a machine
-> attestation.
+## Block versions — how a reader decides which rules apply
+
+Two version numbers exist and they move independently. **The specification
+version** (above) numbers this text. **The block version** (`version:` inside a
+block) numbers the wire format, and it is the block's own field that decides how
+that block is read — never the reader's preference (§a.5). The full release
+history lives in [CHANGELOG.md](CHANGELOG.md); what a verifier NEEDS is this:
+
+| block `version` | spec | what a reader must apply |
+|---|---|---|
+| 2 | pre-1.0 | fenced-block form; only the first comment line is in the signing input |
+| 3 | 1.0 | HTML-comment form; visible appearance (§a.8); `lang`; the `--` ban (§a.1) |
+| 4 | 1.1 | **parsing is total** (§a.1); every comment line and every vendor field is in the signing input (§a.3); a line the reader cannot place makes the block `unsupported` (§a.5) |
+| 5 | 1.2 | `signer-kind` required and certificate-anchored (§a.11); optional `automation` |
+
+Spec releases after 1.2 changed what a **document** may carry, not what a block
+means — `covers` (§a.12, spec 1.5), archive-timestamp blocks (§a.13, spec 1.5)
+and the document boundary (§a.14, spec 1.6/1.7) all apply to version-5 blocks
+unchanged. A v2/v3/v4 block is read under its own rules; a pre-v5 block has no
+signer category, and a verifier MUST report that as *"unspecified (pre-v5)"*
+rather than infer one (§a.5).
 
 ## 0. Scope &amp; non-goals
 
@@ -128,6 +55,46 @@ representation binding, revision chaining, and the certificate &amp; trust model
 
 **Out of scope:** binary attachments inside the block, encryption of the signed
 payload, and the orchestration engine — the file is the canonical state.
+
+### 0.1 Conformance language
+
+The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**,
+**SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY** and **OPTIONAL** in this
+document are to be interpreted as described in BCP 14 (RFC 2119, RFC 8174) when,
+and only when, they appear in all capitals.
+
+A **conforming document** satisfies every MUST that applies to documents —
+notably §a.1 (block syntax), §a.3 (signing input) and §a.14 (boundary). A
+**conforming verifier** satisfies the conformance clause of §g. Neither implies
+the other: a verifier is judged by what it reports, a document by what it is.
+
+### 0.2 Stability &amp; versioning
+
+This specification versions itself by SemVer: **MAJOR** for a change that can
+make an existing signed document read differently (wire breakage), **MINOR** for
+additive or behaviour-widening change, **PATCH** for editorial work that changes
+no behaviour.
+
+**v1.8 is a freeze release.** Until at least **2027-03-01** the normative
+content changes only for a security-critical erratum — a defect that lets a
+tampered document verify, or a valid one read as forged. Everything else queues.
+Editorial corrections may ship as PATCH releases; they change no behaviour by
+definition, and a diff that says otherwise is a bug in the release, not in the
+rule.
+
+The week of 2026-08-13 to 2026-08-20 produced five releases. That was first
+contact: three independent implementations went live against this text at once,
+and each divergence was repaired here rather than papered over in one of them —
+which is where a divergence belongs, but not at that rate forever. The freeze is
+the deliberate end of that phase.
+
+**Algorithm agility.** The allowlist of §c.1 can gain entries in a MINOR
+release. It never loses one: removing an algorithm would silently invalidate
+documents that were sound when signed. An aging algorithm is instead marked
+*not for new signatures*, and existing documents are carried forward by archive
+timestamps (§a.13) — a layer placed while the algorithm still held re-attests
+the document under current ones. That is the designed answer to algorithm decay;
+deletion from the list is not.
 
 ## a. Specification &amp; Format
 
@@ -229,7 +196,9 @@ signer-first) · `timestamp` (§c.5) · `represents` (§a.6) · `revision` +
 `field` (§b).
 
 **Vendor extensions** carry a namespace the vendor demonstrably controls,
-written as a reverse-DNS name: `build.vecto.void`. They are part of the signing
+written as a reverse-DNS name: `com.example.audit` (RFC 2606 reserves
+`example.com` for exactly this use; the published vectors carry a real one,
+`build.vecto.void`, as a measured instance). They are part of the signing
 input and MUST be preserved when re-encoding, but MUST NOT be relied on for
 validity.
 
@@ -912,6 +881,16 @@ something there.
 It is also checkable without keys: whether a document ends at its last block is
 visible in the bytes.
 
+> **NORMATIVE — "its last block" means the last block of EITHER kind.** An
+> implementation that performs this check MUST recognise both opening markers,
+> `<!-- mades-sig` and `<!-- mades-archive-ts` (§a.13), even if it does not
+> process archive layers. A boundary check that knows only signature blocks
+> reads a valid archive layer as appended bytes and reports a well-preserved
+> document as tampered — the exact false accusation §a.5 forbids, produced by
+> the section that exists to prevent silent additions. Measured: one
+> implementation hit this within a day of implementing §a.14. The boundary
+> vectors pin the case.
+
 #### Why a line ending and not a line feed *(v1.7)*
 
 v1.6 said "at most one trailing line feed", and three independent implementations
@@ -1310,37 +1289,46 @@ certificate chain, the appearance — cannot be reconstructed afterwards. An
 implementation that stores only the digest produces genuine signatures nobody
 can verify.
 
-**Interoperability fixtures (RECOMMENDED).** Publish canonicalisation test
-vectors — input, expected canonical form, expected digest — covering BOM,
-CRLF/LF, lone CR, trailing whitespace, missing and multiple trailing newlines,
-leading blank lines and leading whitespace, multi-byte characters and empty
-content. This is where two implementations silently diverge.
+**Interoperability vectors (published, `vectors/`).** The statements below are
+backed by files in this repository, and `reference/test/vectors.test.mjs` reads
+every one of them on every run — a vector the reference implementation cannot
+itself pass proves nothing. Until v1.8 this section *described* vectors that
+lived in one vendor's product tree, where no second implementer could find
+them; a specification that points at evidence its own publication does not
+carry is asserting, not showing.
 
-**Published v4 vectors.** `mades-v4-vectors.json` carries four signed documents
-with their signing input, digest and signature, plus the key that signed them:
-minimal, a vendor field, a counter-signature, and one with a `timestamp`
-field to show it falls outside the signing input.
+- **`canonicalisation-vectors.json`** — §a.2 over thirteen inputs: BOM, CRLF,
+  lone CR, trailing whitespace, missing and multiple trailing newlines, leading
+  blank lines, leading whitespace, interior blank lines, multi-byte content and
+  empty content. Input, expected canonical form, expected digest. This is where
+  two implementations silently diverge, and the failure has no diagnostic.
+- **`boundary-vectors.json`** — §a.14 in both directions: four conforming
+  endings and eight non-conforming tails, including the appended clause the
+  section exists for and the §a.13 interplay case above. These exist because
+  three implementations read v1.6 identically and identically wrongly:
+  agreement between implementations was no evidence, since it came from the
+  same sentence. Implementations SHOULD compare against this file rather than
+  against their own reading of the text.
+- **`mades-v4-vectors.json`** — four signed documents with signing input
+  (base64), digest and signature, plus the throwaway key that signed them:
+  minimal, a vendor field, a counter-signature, and a `timestamp` field shown
+  to fall outside the signing input.
+- **`mades-v5-vectors.json`** — one **real ceremony**: a genuine certificate
+  chain, a genuine RFC 3161 token, and the seal inside the signing input.
+  Deliberately not a throwaway key — v5 went into use with no vector covering
+  it, and the first end-to-end walk found the verifier checking the wrong
+  source; a self-invented case would mostly have proven that one author's
+  writer and reader agree.
+- **`mades-lta-vectors.json`** — §a.13 over five cases: one layer, two layers
+  (the second covering the first), a layer over three signatures, a layer over
+  a `covers` list, and a damaged layer where the layer breaks and the
+  signature beneath it does not.
 
-**Published v5 vectors** (`mades-v5-vectors.json`) add the category cases:
-
-1. a `human` block — the ordinary case;
-2. an `automated` block with `automation: ai`;
-3. **an automated `creation` with a human `approval` signed over it** — the
-   sequence a machine-prepared, human-endorsed document actually produces
-   (§a.11.5), and the one an implementation is most likely to get wrong;
-4. a block whose `signer-kind` disagrees with its certificate, expected result
-   **`invalid`** — a negative vector, because a rule nobody tests is a rule
-   nobody implements;
-5. a v4 block read by a v5 verifier, expected category **"unspecified
-   (pre-v5)"**.
-
-Vectors are signed with a throwaway key rather than a production certificate —
-what a second implementation needs to check is the **construction of the
-signing input**, and that does not depend on who holds the key. Cases 4 and 5
-additionally need a certificate, so they ship with a throwaway CA whose root is
-included. A generator SHOULD verify each vector through its own verification
-path before publishing it: a fixture an implementation cannot itself verify
-proves nothing.
+**Still to publish** — the v5 *category* cases (§a.11): human, automated, an
+automated `creation` under a human `approval`, a certificate/category mismatch
+expected `invalid`, and a v4 block read by a v5 verifier. They need a throwaway
+CA that carries category assertions, and shipping them half-made would be worse
+than naming them here. Tracked under Open decisions.
 
 ## f. Integration in existing flows
 
@@ -1415,14 +1403,42 @@ Orchestrating engines SHOULD additionally keep an out-of-band evidence record
 
 ## h. Roll-out
 
-**Tranche 1:** publish v1.2 · `mades-sign`/`mades-verify` with the comment form,
-the three appearance modes, the signer category, and published interoperability
-fixtures for v4 and v5 · use internally.
-**Tranche 2:** `format: jws` · `.well-known/mades-keys` · a desktop reader with
-a proper validation report (§d Level 3) · Python/Rust reference implementations.
-**Tranche 3:** pre-declared field UI · publicly trusted CA + qualified TSA · QES
-via QTSP · organisational seals · **`archive-timestamp` for B-LTA** · DID key-id
-profile · standards-body submission if traction warrants.
+**Done** (as of v1.8): the comment form, the three appearance modes, the signer
+category, archive timestamps and the document boundary; a reference
+implementation and published interoperability vectors in this repository; three
+independent implementations in production use.
+
+**Next:** `format: jws` · `.well-known/mades-keys` · the v5 category vectors
+(§e) · a desktop reader with a proper validation report (§d Level 3) ·
+independent (non-JavaScript) reference implementations.
+
+**Later, if traction warrants:** publicly trusted CA + qualified TSA · QES via
+QTSP · organisational seals · a DID `key-id` profile · standards-body
+submission.
+
+## References
+
+**Normative** — a conforming implementation needs these:
+
+- **BCP 14** — RFC 2119 + RFC 8174, conformance language (§0.1)
+- **CommonMark 0.31** — the fence rule of §a.1 is CommonMark's, by construction
+- **RFC 3339** — timestamps in `signed-at`
+- **RFC 3161** — the `timestamp` token (§c.5) and archive timestamps (§a.13)
+- **RFC 5280** — certificates and chains (§c.3, §c.4)
+- **RFC 6838** — the `media-type` of `covers` entries (§a.12)
+
+**Informative** — cited for rationale, not required to implement:
+
+- **RFC 6648** (BCP 178) — why vendor fields carry a domain, not `x-` (§a.1)
+- **RFC 2606** — reserved example domains (§a.1)
+- **eIDAS** (Regulation (EU) 910/2014), art. 26 and 35-36 — the AdES
+  requirements (§c.1, §c.4, §g) and the signature/seal distinction (§c.2)
+- **ETSI EN 319 102-1, TS 119 431-1 / CEN EN 419241** — validation and
+  signature-activation models (§c.3)
+- **ETSI TS 119 312** — algorithm usage periods, one of the three renewal
+  triggers for archive timestamps (§a.13)
+- **CSC API v2** — the remote-signing split that §e's external-signing API
+  mirrors
 
 ## Annex A (informative) — reference deployment
 
@@ -1439,66 +1455,74 @@ that commitment — so a machine in that deployment can fix a version and can
 never express agreement. That is a *deployment* rule, expressed where §a.11.3
 says such rules belong: in the certificate policy, not in this specification.
 
+## Annex B (informative) — relation to neighbouring work
+
+The obvious question from a reviewer is *"why not one of these?"* — so here is
+each, with the one-line answer. None of them is competition; several are
+complements this specification deliberately leans on.
+
+**OpenPGP cleartext signing** (RFC 9580 §7) is the ancestor: an inline signature
+in a text document. It is also the cautionary tale — the armored block renders
+as a wall of base64 in every viewer, dash-escaping rewrites the very content it
+signs, and there is no certificate-per-signing model, no commitment semantics,
+no timestamping story and no AdES ladder. MAdES is what that idea looks like
+after PAdES happened.
+
+**C2PA / Content Credentials** (2.4+) can embed manifests into Markdown — the
+nearest neighbour by host format. It answers a different question: *provenance*
+— which tools produced and edited this content. Its own specification states it
+makes no judgment and expresses no agreement. MAdES answers *commitment*: a
+person or an accountable automation stands behind these bytes, under a
+certificate, with eIDAS art. 26 in reach. The two can coexist in one file; a
+document could carry C2PA provenance about how it was made and a MAdES
+signature saying someone agreed to it.
+
+**XAdES / CAdES / PAdES / JAdES** (ETSI) are the AdES family for XML, CMS, PDF
+and JSON. Markdown had no member; MAdES is built to be that member rather than
+an alternative to the family — it borrows the baseline levels (§g), the
+archive-timestamp construction (§a.13, PAdES' document-time-stamp and CAdES'
+archive-time-stamp resolved the coverage question the same way), and the
+validation vocabulary. Where the family had already decided something, this
+specification follows it and says so inline.
+
+**W3C Verifiable Credentials / Data Integrity** sign JSON-LD claims about
+subjects, machine-first. A VC could attest *who a signer is*; MAdES records
+*what they signed*. Different layer, no overlap in role.
+
+**Sigstore, minisign, SSH signatures** are detached-signature tools for
+artifacts. Detachment is the property MAdES exists to remove: a signature that
+travels separately from a document that is copy-pasted daily is a signature
+that gets lost.
+
 ## Provenance &amp; credits
 
-Proposed by **ITbrouwerij** (&lt;https://itbrouwerij.be&gt;) as part of the Vecto
-OS project. v0.5–v1.2 incorporate findings from two independent implementations,
-from the first live signatures, and from a security review of the reference
-implementation — several normative rules in §a.3, §a.5, §a.7, §c.4 and §c.5
-exist because that review found the reference implementation on the wrong side
-of them. Vendor extensions via a reverse-DNS namespace (§a.1).
+Proposed by **ITbrouwerij** (&lt;https://itbrouwerij.be&gt;). v0.5–v1.2
+incorporate findings from two independent implementations, from the first live
+signatures, and from a security review of the reference implementation —
+several normative rules in §a.3, §a.5, §a.7, §c.4 and §c.5 exist because that
+review found the reference implementation on the wrong side of them. v1.3–v1.8
+were shaped by a third implementation going live against this text: the
+vendor-field namespace (§a.1), the boundary (§a.14), its CRLF refinement and
+the §a.13 marker rule were all raised as measured findings by implementers, not
+authored at a desk. The changelog credits each at its release.
 
 ## Open decisions
 
-- **DEC-1 / DEC-7** — conformance: **resolved** (§g).
-- **DEC-2 / DEC-8** — key distribution: **resolved** (§c.7).
-- **DEC-4 / DEC-9** — migration of Vecto mechanisms: HMAC uses become machine
-  attestations (§c.2/f). GUI adoption open.
-- **`automation` vocabulary** — three values registered (§a.11.1). Deliberately
-  open, so the question is not *which values* but whether a light-weight
-  registry becomes necessary once more than one deployment coins terms.
-- **Category for the raw-key path** — §c.7 reports it unanchored. A JWK
-  extension or a signed manifest attribute could anchor it; not specified,
-  because the certificate path covers every deployment that needs the
-  distinction today.
-- ~~**`archive-timestamp`**~~ — **resolved** (§a.13, v1.5). Its own block, not a
-  field, covering the whole document including every preceding block. Renewal is
-  a further appended block covering everything before it, so §b's append-only
-  invariant holds unchanged rather than needing an exception. The question
-  answered itself once the input was written down: it is the same
-  canonicalisation a signature uses, so there was never a second rule to
-  invent.
-- ~~**A signature covers a prefix, and nothing bounds the document**~~ —
-  **resolved** (§a.14, v1.6). The document ends at its last block; bytes after it
-  make it non-conforming and a verifier must say `invalid`. The instinctive
-  remedy — a signed length or digest field — was considered and rejected: the
-  appended bytes lie outside the content such a field would describe, so it would
-  have matched anyway. A boundary is a property of the document, not of a block,
-  and a signed field that appears to cover something it does not is worse than
-  an absent one. Raised by the Vecto Sign implementation, which measured it on
-  both sides before reporting it.
-- **`revocation-info`** — the B-LT field is reserved, unreachable for short-lived
-  certificates, and only worth specifying for deployments issuing long-lived
-  ones.
-- **Appearance for `mades-sig-fields`** — the unfilled-field appearance is
-  described in §b but its layout is not yet pinned to the same normative detail
-  as §a.8.
-- ~~**Vendor-field collisions**~~ — **resolved** (§a.1, v1.3). A vendor field
-  carries a reverse-DNS namespace the vendor demonstrably controls; a name
-  without one is `unsupported`. No registry, no institution. Raised by the Vecto
-  Sign implementation, which arrived at the same answer independently of
-  RFC 6648 and then supplied the piece that was missing: *who* decides whether a
-  namespace is legitimate. A DNS name answers that by itself.
-- ~~**A document about MAdES cannot be signed with MAdES**~~ — **resolved**
-  (§a.1, v1.4). The marker counts only at the start of a line, and never inside
-  a fenced code block. Found by writing the specification's own examples: the
-  reference verifier reported a phantom block on a document whose signature was
-  sound. `examples/05-a-real-signed-document.md` still describes the limitation,
-  because it was signed before the fix and rewriting a signed document to make
-  it say something more flattering is the exact thing this format exists to
-  prevent.
-- ~~**Unknown signed fields are invisible**~~ — **resolved** (§d, v1.3). Also
-  raised by the Vecto Sign implementation, and confirmed on both sides before it
-  was written down: two independent verifiers preserved unknown signed fields
-  and showed neither. That is the strongest evidence a normative rule can have,
-  because it proves the behaviour does not arise from good intentions.
+Resolved questions moved to [CHANGELOG.md](CHANGELOG.md) with their release;
+this list is only what is genuinely open. None of it blocks the freeze (§0.2):
+each item is additive, and each says what unblocks it.
+
+- **The v5 category vectors** (§e) — five cases including a negative one. Needs
+  a throwaway CA that carries category assertions (§a.11.2). Publishing them
+  half-made would be worse than naming them here.
+- **`automation` vocabulary** (§a.11.1) — three values registered; deliberately
+  open. The question is not *which values* but whether a lightweight registry
+  becomes necessary once more than one deployment coins terms.
+- **Category for the raw-key path** (§c.7) — reported unanchored today. A JWK
+  extension or a signed manifest attribute could anchor it; unspecified because
+  the certificate path covers every deployment that needs the distinction.
+- **`revocation-info`** — the B-LT field stays reserved: unreachable for
+  short-lived certificates, and only worth specifying for deployments issuing
+  long-lived ones.
+- **Appearance for `mades-sig-fields`** (§b) — the unfilled-field appearance is
+  described but not pinned to §a.8's normative detail.

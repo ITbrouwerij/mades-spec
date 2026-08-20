@@ -8,7 +8,7 @@
     "mades-verify": "./reference/mades-verify.mjs"
   },
   "scripts": {
-    "test": "node --test reference/test/mades.test.mjs"
+    "test": "node --test reference/test/mades.test.mjs reference/test/vectors.test.mjs"
   },
   "keywords": [
     "markdown",

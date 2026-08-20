@@ -1,0 +1,68 @@
+{
+  "$schema": "https://vecto.build/schemas/mades-vectors-1.json",
+  "spec": "MAdES — the document boundary (§a.14)",
+  "specVersion": "1.8",
+  "note": "Conforming and non-conforming documents under §a.14 as of v1.7: a document ends at the closing --> of its last block, with at most one trailing line ending (LF, CRLF or a lone CR). These exist because three independent implementations read v1.6 identically and identically wrongly — agreement between implementations was no evidence, since it came from the same sentence. A shared answer file is the fix: implementations compare against these cases instead of against their own reading. The last case pins the §a.13/§a.14 interplay: an archive-timestamp block is a block, and a boundary check that does not recognise its marker reports a valid archive layer as tampering.",
+  "cases": [
+    {
+      "name": "ends exactly at -->",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->",
+      "conforming": true
+    },
+    {
+      "name": "one trailing LF",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\n",
+      "conforming": true
+    },
+    {
+      "name": "one trailing CRLF (v1.7)",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\r\n",
+      "conforming": true
+    },
+    {
+      "name": "one trailing lone CR (v1.7)",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\r",
+      "conforming": true
+    },
+    {
+      "name": "two LF",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\n\n",
+      "conforming": false
+    },
+    {
+      "name": "two CRLF",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\r\n\r\n",
+      "conforming": false
+    },
+    {
+      "name": "mixed LF + CRLF",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\n\r\n",
+      "conforming": false
+    },
+    {
+      "name": "LF then spaces",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\n  ",
+      "conforming": false
+    },
+    {
+      "name": "a single space",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n--> ",
+      "conforming": false
+    },
+    {
+      "name": "a tab",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\t",
+      "conforming": false
+    },
+    {
+      "name": "an appended clause — the case this section exists for",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\n\n## Additional clause\n\nThe client shall further pay EUR 50,000.\n",
+      "conforming": false
+    },
+    {
+      "name": "an archive-timestamp block is a BLOCK, not trailing content (v1.5 + v1.6 interplay)",
+      "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\n\n<!-- mades-archive-ts\nversion: 5\ntimestamp: c2ln\n-->\n",
+      "conforming": true
+    }
+  ]
+}

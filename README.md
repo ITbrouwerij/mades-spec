@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml/badge.svg)](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml)
 
-> **Specification v1.7** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
+> **Specification v1.8 (frozen until 2027-03-01, §0.2)** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
 >
 > An open specification for signing Markdown. Not the documentation of any one
 > product — a conforming implementation must be able to succeed knowing nothing
@@ -216,6 +216,15 @@ green — the reader came there for certainty and leaves with the wrong one.
 - 📝 [**CHANGELOG.md**](CHANGELOG.md) — what changed per version, and why
 
 ---
+
+## Interoperability vectors
+
+`vectors/` carries the published answer files: canonicalisation (§a.2), the
+document boundary (§a.14), signed v4 and v5 documents, and archive layers
+(§a.13). An implementation compares against these files instead of against its
+own reading of the text — three implementations once read one sentence
+identically and identically wrongly, which is why a shared answer file exists.
+`reference/test/` re-verifies every vector on every run.
 
 ## Status
 

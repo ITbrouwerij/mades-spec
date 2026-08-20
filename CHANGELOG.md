@@ -9,6 +9,64 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.8 — 2026-08-20
+
+**The freeze release: the spec becomes dossier-grade and then stops moving.**
+
+Five releases in one week was first contact — three implementations went live
+against this text at once, and every divergence was repaired here rather than in
+one of them. This release ends that phase deliberately: §0.2 freezes normative
+content until at least **2027-03-01** (security-critical errata excepted,
+editorial as PATCH), and states the algorithm-agility policy — the §c.1
+allowlist gains entries in MINOR releases and never loses one; aging algorithms
+are marked *not for new signatures* and existing documents are carried by
+archive timestamps (§a.13).
+
+### The vectors are now actually published (`vectors/`)
+
+The spec referenced "published v4/v5 vectors" that lived in one vendor's product
+tree, where no second implementer could find them — and §e described five v5
+category cases that were never built at all. A specification pointing at
+evidence its publication does not carry is asserting, not showing. Now in this
+repository, read by `reference/test/vectors.test.mjs` on every run:
+canonicalisation (13 cases, new), boundary (12 cases, new, both directions),
+v4 (4 signed documents), v5 (1 real ceremony), archive layers (5 cases). The
+missing category five-pack is named honestly under Open decisions instead of
+described as existing.
+
+### One new normative rule (§a.14)
+
+*"Its last block"* means the last block of **either** kind: a boundary check
+MUST recognise both `<!-- mades-sig` and `<!-- mades-archive-ts`, even without
+processing layers. One implementation read a valid archive layer as appended
+bytes within a day of implementing §a.14 — the exact false accusation §a.5
+forbids, produced by the anti-tampering section itself. A boundary vector pins
+it.
+
+### Structure and neutrality
+
+- **BCP 14 conformance language** (§0.1) — the MUSTs finally say whose MUSTs
+  they are.
+- **The embedded changelog left the header.** It duplicated this file, had
+  drifted (v1.6/v1.7 missing), and was ordered v1.2 → v1.1 → v1.0 → v1.5. In
+  its place: a normative **block-version table** — the one thing a verifier
+  actually needs from history. v0.4–v1.2 entries are backfilled below.
+- **References** section (normative/informative split) and **Annex B**: relation
+  to OpenPGP cleartext, C2PA (which can embed in Markdown since 2.4 and answers
+  provenance, not commitment), the ETSI AdES family, W3C VC and detached-signing
+  tools.
+- **§h roll-out** no longer lists shipped work (archive timestamps) as future
+  plans, and no longer says "publish v1.2" as an ambition.
+- Vendor-extension example is now `com.example.audit` (RFC 2606); the header no
+  longer names a product as the reference implementation — it is in this
+  repository; Open decisions no longer cites one vendor's internal ticket
+  numbers.
+
+Nothing in this release changes any signing input, any canonicalisation or any
+verdict on existing documents. Block version stays `5`.
+
+---
+
 ## v1.7 — 2026-08-19
 
 **The document boundary accepts a line ending, not only a line feed.**
@@ -344,6 +402,43 @@ none of them.
 Both of the last two were raised by the Vecto Sign implementation.
 
 ---
+
+## v1.2 — 2026-08-12
+
+**Who signed: a person, or a machine.** Block `version: 5` adds `signer-kind`
+(required, closed: `human`/`automated`) with optional `automation`; the category
+is anchored in the certificate and a mismatch is `invalid` (§a.11). One
+invariant carries it: *`human` can only be established by a human signature* —
+an unrecognised value degrades to not-human, never to `human`. Machine
+attestations and automated signatures are distinct and must not be presented as
+one (§c.2). Pre-v5 blocks report "unspecified (pre-v5)".
+
+## v1.1 — 2026-08-11
+
+**The block says what it signs, and signs what it says.** Block `version: 4`:
+parsing is total (comment, blank or well-formed field — no fourth category;
+anything else is `unsupported`, §a.1/§a.5), and every comment line and vendor
+field is inside the signing input (§a.3). Before this, a warning line could sit
+*inside* a signed block without breaking the signature, and a vendor field was
+signed but never written back — measured on the reference implementation.
+
+## v1.0 — 2026-08-08
+
+**The signature block becomes invisible, and the signature becomes visible.**
+Block `version: 3`: the block moves from a fenced code block to an HTML comment
+(hidden by conforming renderers, visible in source), and a signed SVG appearance
+— the seal — becomes the visible half (§a.8), deliberately the PDF anatomy.
+Also: `lang` (§a.9) and the normative `--` ban (§a.1).
+
+## v0.9 — v0.4 (2026-08-07 and earlier)
+
+Condensed: **v0.9** corrected "B-T is the ceiling" — B-LTA is reachable with
+short-lived certificates because archive timestamps rest on the timestamp chain,
+not revocation data (§g); nonce comparison made normative (§c.5). **v0.8** trust
+is a property of the verifier, not the document (§c.4). **v0.7** exclusion rule
+generalised (§a.3). **v0.6** signing input covers the block's own metadata;
+`represents`; `revision`/`supersedes`. **v0.4** asymmetric-only personal
+signatures; HMAC demoted to machine attestation.
 
 ## v0.3 — 2026-04-28
 
