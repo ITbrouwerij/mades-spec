@@ -2,14 +2,14 @@
   "$schema": "https://vecto.build/schemas/mades-vectors-1.json",
   "spec": "MAdES — Markdown Advanced Electronic Signatures",
   "blockVersion": 4,
-  "generatedFrom": "proof/api/src/signing/mades.ts",
-  "note": "Getekend met een WEGWERPSLEUTEL, niet met een certificaat van Vecto Sign. Wat deze vectoren vastleggen is de constructie van de ondertekeningsinput onder v4; die verandert niet door wie de sleutel houdt. De privésleutel staat erbij zodat een andere implementatie de vectoren kan narekenen — er hangt niets aan.",
+  "generatedFrom": "the reference signing path of the first implementation, with a throwaway key",
+  "note": "Signed with a THROWAWAY key, not a certificate. What a second implementation needs to check is the construction of the signing input, and that does not depend on who holds the key. The signingInput field is base64 of the exact UTF-8 bytes that were signed.",
   "rules": [
-    "Ontleden is totaal: elke regel in het blok is commentaar, leeg, of een geldig veld. Iets anders maakt het blok `unsupported`, niet `invalid`.",
-    "Wat getekend wordt, wordt geschreven. Geen allowlist bij het serialiseren.",
-    "De ondertekeningsinput is: genormaliseerde inhoud + \"\\n\" + alle commentaarregels in documentvolgorde + de velden gesorteerd op sleutelnaam.",
-    "`signature` en `timestamp` vallen buiten de ondertekeningsinput.",
-    "Een v2- of v3-blok wordt onder de regels van ZIJN versie gelezen. Het versieveld beslist."
+    "The signing input is canonical content + LF + canonical metadata (§a.3).",
+    "Every comment line and every field except signature/timestamp is inside the signing input.",
+    "Fields are sorted by key name; comment lines keep document order.",
+    "A counter-signature covers the document INCLUDING the previous block.",
+    "signature and timestamp fall outside the signing input — the unavoidable exclusion."
   ],
   "key": {
     "algorithm": "ed25519",
@@ -18,8 +18,8 @@
   },
   "cases": [
     {
-      "name": "minimaal",
-      "note": "Alleen de verplichte velden. De metadata-helft is gesorteerd op SLEUTELNAAM.",
+      "name": "minimal",
+      "note": "Required fields only. The metadata half is sorted by key name; the comment line keeps document order.",
       "document": "# Overeenkomst\n\nEen zin.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com — approval — 2026-08-10\nversion: 4\nalgorithm: ed25519\nsigner: alice@example.com\ncommitment: approval\nsigned-at: 2026-08-10T12:00:00Z\nsignature: UbSmBf0jd/WKQl4JSsQptJUXtpXk3yo4r6IHQKPesUBVyjU3z+hNSLKmL29AgmkhTNO18l5HWAOb3jLY4pE6BA==\n-->\n",
       "fields": {
         "version": 4,
@@ -34,8 +34,8 @@
       "rules": 4
     },
     {
-      "name": "eigen-veld",
-      "note": "Een veld buiten de bekende lijst. Onder v3 werd dit wél getekend en NIET weggeschreven — het blok was daarmee voorgoed onverifieerbaar. Onder v4 wordt geschreven wat getekend wordt.",
+      "name": "vendor-field",
+      "note": "A field outside the known list. Under v3 this was signed but never written back, making the block permanently unverifiable; under v4 it is signed AND written (§a.3).",
       "document": "# Overeenkomst\n\nMet een eigen veld.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com — approval — 2026-08-10\nversion: 4\nalgorithm: ed25519\nsigner: alice@example.com\ncommitment: approval\nsigned-at: 2026-08-10T12:00:00Z\nsignature: UbMx3Xx6t66xKJNDF2lBJiianWvVdEl/QdFAfhBOaL2FrUEGqWM0My8pg/1r3LJnMcCIydwB8XIkeZmKPZg5AQ==\nx-dossier: ABC-123\n-->\n",
       "fields": {
         "version": 4,
@@ -51,8 +51,8 @@
       "rules": 4
     },
     {
-      "name": "tweede-handtekening",
-      "note": "Een tegenhandtekening: het tweede blok dekt het document MET het eerste blok erin.",
+      "name": "counter-signature",
+      "note": "The second block covers the document INCLUDING the first block — that is what makes it a counter-signature rather than a parallel one (§b).",
       "document": "# Overeenkomst\n\nTwee partijen.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com — approval — 2026-08-10\nversion: 4\nalgorithm: ed25519\nsigner: alice@example.com\ncommitment: approval\nsigned-at: 2026-08-10T12:00:00Z\nsignature: A/4tqgOzS8fON9QqvRDjMIUWRWr6fnrgQGrXsG8kU7Qw1/6M40pPCq7HXvFQXg2bAPqn5in46V1uw2VZpxAMDw==\n-->\n\n<!-- mades-sig\n# ✓ Signed by bob@example.com — approval — 2026-08-10\nversion: 4\nalgorithm: ed25519\nsigner: bob@example.com\ncommitment: approval\nsigned-at: 2026-08-10T12:00:00Z\nsignature: SXZkM7yX1Dfp6XsDJx1hcmvUA/iqt12QkfbHQo4snlYYQBku3EQXGv8C3hxnQO6yG4PIVJRblbgkh07WMwyIAQ==\n-->\n",
       "fields": {
         "version": 4,
@@ -67,8 +67,8 @@
       "rules": 4
     },
     {
-      "name": "met-tijdstempel-veld",
-      "note": "`signature` en `timestamp` staan BUITEN de ondertekeningsinput — ze bestaan nog niet wanneer er getekend wordt. Hier staat een verzonnen waarde in `timestamp` om te tonen dat hij de handtekening niet raakt.",
+      "name": "with-timestamp-field",
+      "note": "signature and timestamp sit OUTSIDE the signing input (§a.3): a token can never cover the bytes that carry it.",
       "document": "# Overeenkomst\n\nMet tijdstempel.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com — approval — 2026-08-10\nversion: 4\nalgorithm: ed25519\nsigner: alice@example.com\ncommitment: approval\nsigned-at: 2026-08-10T12:00:00Z\ntimestamp: MIIB-verzonnen-token\nsignature: wovG5wt2k+L3BCt6M1RND4LWra87U2mc6yJEnzUgD0HXG3/mpVLlbHHI6wEkVRfjK5x7tiGi9clil1f3XNNYBQ==\n-->\n",
       "fields": {
         "version": 4,

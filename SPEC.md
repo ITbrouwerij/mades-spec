@@ -75,21 +75,10 @@ make an existing signed document read differently (wire breakage), **MINOR** for
 additive or behaviour-widening change, **PATCH** for editorial work that changes
 no behaviour.
 
-**v1.8 is a stability release.** From here this specification is treated as
-stable: normative change requires a demonstrated defect — foremost one that
-lets a tampered document verify, or a valid one read as forged — not an idea
-for an improvement. Improvements queue under Open decisions until enough of
-them justify a deliberate release. No end date is promised, in either
-direction: a date would either force a release nobody needs or forbid a fix
-somebody does. What is promised is the bar. Editorial corrections may ship as
-PATCH releases; they change no behaviour by definition, and a diff that says
-otherwise is a bug in the release, not in the rule.
-
-The week of 2026-08-13 to 2026-08-20 produced five releases. That was first
-contact: three independent implementations went live against this text at once,
-and each divergence was repaired here rather than papered over in one of them —
-which is where a divergence belongs, but not at that rate forever. The freeze is
-the deliberate end of that phase.
+**v1.8 is a stability release.** This version is treated as stable: normative
+change requires a demonstrated defect; improvements queue under Open decisions
+for a deliberate later release. Editorial corrections may ship as PATCH
+releases.
 
 **Algorithm agility.** The allowlist of §c.1 can gain entries in a MINOR
 release. It never loses one: removing an algorithm would silently invalidate

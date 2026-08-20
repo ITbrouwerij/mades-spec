@@ -15,11 +15,9 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 Five releases in one week was first contact — three implementations went live
 against this text at once, and every divergence was repaired here rather than in
-one of them. This release ends that phase deliberately: §0.2 declares the spec
-stable — normative change now requires a demonstrated defect, not an idea for
-an improvement; improvements queue under Open decisions. Deliberately no end
-date: a date would either force a release nobody needs or forbid a fix somebody
-does. The bar is the promise. It also states the algorithm-agility policy — the §c.1
+one of them. This release ends that phase: §0.2 declares the spec stable —
+normative change requires a demonstrated defect, improvements queue under Open
+decisions. It also states the algorithm-agility policy — the §c.1
 allowlist gains entries in MINOR releases and never loses one; aging algorithms
 are marked *not for new signatures* and existing documents are carried by
 archive timestamps (§a.13).
