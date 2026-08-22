@@ -18,6 +18,11 @@
  * signature that was perfectly sound.
  */
 import { createVerify, createPublicKey, verify as verifyRaw, X509Certificate } from 'node:crypto';
+import {
+  categoryOf,
+  commitmentPermitted,
+  permittedCommitmentsOf,
+} from './mades-certpolicy.mjs';
 import { readFileSync } from 'node:fs';
 
 import {
@@ -274,6 +279,44 @@ function verifyBlock(index) {
       info('meaning', 'the signature is valid; the claim about who made it is not');
     } else if (d.fields.signer) {
       ok('the `signer` field is supported by the certificate');
+    }
+
+    // §a.11.2 — the CATEGORY must be anchored in the certificate, not merely
+    // stated in the block. `signer-kind` sits in the signed fields, so changing
+    // it breaks the signature; but the signer fills it in themselves, and can
+    // write `human` while holding a certificate issued to a machine. A policy
+    // OID is what makes the claim someone else's assertion.
+    const certKind = categoryOf(leaf);
+    if (d.rules >= 5 && kind) {
+      if (certKind === 'conflict') {
+        bad('the certificate asserts two signer categories — no category is established');
+      } else if (!certKind) {
+        // Not a failure of the signature: a shortcoming of the issuance. The
+        // reader is entitled to that difference, and MUST NOT see `human`.
+        note(`the block says ${kind}; the certificate asserts no category — asserted but not anchored (§a.11.2)`);
+      } else if (certKind !== kind) {
+        bad(`the block says ${kind}, the certificate says ${certKind} (§a.11.2)`);
+      } else {
+        ok(`the signer category (${kind}) is anchored in the certificate`);
+      }
+    }
+
+    // §a.11.3 — and what that credential is allowed to COMMIT to. Absent means
+    // unconstrained; only OIDs in the mapping are constraints (see the note in
+    // §a.11.3 — reading unknown policy OIDs as an empty permitted set would
+    // reject every certificate ever issued).
+    const permitted = permittedCommitmentsOf(leaf);
+    if (permitted) {
+      // The EFFECTIVE commitment: `approval` when the field is absent (§a.4).
+      // A machine certificate constrained to `creation` does not get a free
+      // pass by omitting the field — omitting it is claiming agreement.
+      const commitment = d.fields.commitment ?? 'approval';
+      info('constrained to', permitted.join(', '));
+      if (commitmentPermitted(commitment, permitted)) {
+        ok(`the commitment (${commitment}) is within the certificate's constraint`);
+      } else {
+        bad(`the certificate permits ${permitted.join(', ')}; the block commits ${commitment} (§a.11.3)`);
+      }
     }
 
     info('cert validity', `${leaf.validFrom} … ${leaf.validTo}`);

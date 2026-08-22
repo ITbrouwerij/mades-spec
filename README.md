@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml/badge.svg)](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml)
 
-> **Specification v1.8.1 (stable, §0.2)** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
+> **Specification v1.9 (stable, §0.2)** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
 >
 > An open specification for signing Markdown. Not the documentation of any one
 > product — a conforming implementation must be able to succeed knowing nothing

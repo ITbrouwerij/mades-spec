@@ -9,6 +9,52 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.9 — 2026-08-22
+
+**§a.11.3 has an encoding.** It said "the mechanism is specified here" and
+specified nothing — no OID, no field, no mapping rule. The clause is normative
+*and* named in the conformance requirement of §g, so as published no
+implementation could conform to it, this repository's own reference included.
+
+The defect was demonstrated, not argued: an independent implementer built the
+other seven checks of §a.11, hit this one, and deliberately did **not** invent
+a coding — which would have produced an implementation that worked and
+interoperated with nobody. That is the §a.14 lesson from v1.6, applied by
+someone else. It is also exactly the bar §0.2 sets for changing stable text.
+
+- Commitment constraints are certificate policy OIDs in the signing
+  certificate, the same mechanism §a.11.2 already uses for the category.
+  Reference assignments under PEN 65498: `…2.2.1` `creation`, `…2.2.2`
+  `approval`, `…2.2.3` `receipt`, `…2.2.4` `witness`.
+- Six numbered rules replace the self-reference, and they settle the questions
+  two implementations would otherwise answer differently: read the signing
+  certificate (not the issuer, not the path's validated policy set); absent
+  means unconstrained; present means exactly that set; compare the *effective*
+  commitment, so an absent `commitment` field is `approval` and not "none".
+- **An OID a verifier does not recognise is not a constraint.** Written down
+  because the opposite reading — "has policies, none of them mine, therefore
+  constrained to nothing" — would reject every signature under every
+  certificate ever issued. Certificates carry assurance-level and CA policy
+  OIDs as a matter of course.
+- `reference/mades-verify.mjs` implements the check; §e claimed it did since
+  v1.5. It gained §a.11.2's certificate anchoring at the same time, which §e
+  also claimed and which was equally absent — the two read the same bytes, and
+  now do so through one module (`reference/mades-certpolicy.mjs`) so they
+  cannot come to disagree about what a certificate says.
+
+**§a.11.2: "asserted but not anchored" is not `invalid`.** Also normative, also
+from a demonstrated divergence — one implementation reported the outcome as a
+failure, two as a note. It matters more than it sounds: every certificate
+issued before a deployment adopts §a.11.2 asserts no category, so the strict
+reading turns every document signed to date red on the day the section ships.
+The signature is sound, the block is readable, and what is missing is an
+assertion the issuer never made; a verifier MUST NOT lower the verdict on that
+ground alone.
+- Additive: no certificate in existence asserts these OIDs, so every document
+  signed to date reads exactly as before. MINOR, not MAJOR.
+
+---
+
 ## v1.8.1 — 2026-08-20
 
 **The published vectors describe themselves.** No normative change; the first

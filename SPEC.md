@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.8.1 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
+> **Status:** Specification · **Version:** 1.9 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -79,6 +79,15 @@ no behaviour.
 change requires a demonstrated defect; improvements queue under Open decisions
 for a deliberate later release. Editorial corrections may ship as PATCH
 releases.
+
+> **What that bar looks like when it is met.** v1.9 changes normative text
+> under this rule, and the defect was demonstrated rather than argued: an
+> independent implementer built §a.11 and reported that §a.11.3 could not be
+> built, because the clause said "the mechanism is specified here" and
+> specified nothing. That made the conformance claim of §g unreachable for
+> every implementation including this document's own reference. The remedy is
+> additive — it gives an encoding where there was none — so nothing already
+> signed reads differently, and it is therefore MINOR.
 
 **Algorithm agility.** The allowlist of §c.1 can gain entries in a MINOR
 release. It never loses one: removing an algorithm would silently invalidate
@@ -612,6 +621,22 @@ category. What is NOT permitted is a certificate that asserts no category at
 all being used to sign a v5 block: the verifier MUST report **"category
 asserted but not anchored"** and MUST NOT present the block as `human`.
 
+**That outcome is not `invalid`** *(v1.9)*. The three verdicts of §a.5 answer a
+different question, and this one has its own report precisely because it fits
+none of them: the signature is sound, the block is readable, and what is
+missing is an assertion the *issuer* never made. A verifier MUST NOT lower the
+verdict on this ground alone. Mismatch is `invalid` (the block and the
+certificate contradict each other), an unreadable category is `unsupported`
+(§a.11.1), and *unanchored* is neither — it is a finding about the credential,
+reported beside a verdict the cryptography earned.
+
+> **Written down because two implementations disagreed** — one reported it as a
+> failure, two as a note. That divergence is not cosmetic: every certificate
+> issued before a deployment adopted this section asserts no category, so the
+> stricter reading turns every document signed to date red on the day the
+> section is implemented. Whether that is a defect or a disclosure is exactly
+> what a reader is entitled to have decided for them, once, here.
+
 > **Why not a bespoke X.509 extension.** A new extension needs every CA in the
 > path to emit it and every verifier to parse it; a policy OID needs neither.
 > The cheapest mechanism that actually holds is the one implementations will
@@ -627,9 +652,57 @@ This is what lets a deployment issue machine credentials that can fix a version
 but can never express agreement — enforced in the credential rather than in the
 application, so it holds even when the application is wrong.
 
-The constraint is expressed in the issuing CA's certificate policy and carried
-in the certificate; the **mechanism** is specified here, while **which profile
-gets which constraint** is deployment policy.
+**The encoding is the same mechanism as §a.11.2**: certificate policy OIDs in
+the signing certificate, one per permitted commitment. Reference assignments,
+published under ITbrouwerij's IANA PEN (65498) and **free for any
+implementation to use**:
+
+```
+1.3.6.1.4.1.65498.2          MAdES
+                  .2.2       commitment constraints
+                  .2.2.1     creation
+                  .2.2.2     approval
+                  .2.2.3     receipt
+                  .2.2.4     witness
+```
+
+The rules a verifier applies:
+
+1. Read `certificatePolicies` (RFC 5280 §4.2.1.4) from the **signing
+   certificate** — the same certificate §a.11.2 reads, not the issuer's and not
+   the validated policy set of the path.
+2. **A certificate asserting none of these OIDs is unconstrained.** Every
+   commitment is permitted, and the verifier reports no constraint.
+3. A certificate asserting one or more of them permits **exactly** those
+   commitments and no others.
+4. The commitment compared is the **effective** one: `approval` when the field
+   is absent (§a.4), not "no commitment". A certificate constrained to
+   `creation` that signs a block with no `commitment` field has signed
+   `approval`, and that is `invalid`.
+5. An unrecognised commitment value (§a.4) cannot be a member of a constrained
+   set, so it is `invalid` under a constrained certificate. Under an
+   unconstrained one it stays §a.4's "unrecognised commitment".
+6. The report MUST name both the commitment and the permitted set — "the
+   certificate permits `creation`; the block commits `approval`". A constraint
+   the reader cannot see is a rejection they cannot act on.
+
+A deployment MAY instead use policy OIDs of its own, declared in its
+certificate policy; verifiers then carry a configured mapping from OID to
+commitment, exactly as for categories.
+
+> **An OID a verifier does not recognise is not a constraint.** This is the one
+> rule that must not be got wrong, and it is easy to get wrong. Certificates
+> carry policy OIDs for all sorts of reasons — assurance levels, CA policy,
+> national schemes. An implementation that read "this certificate has policy
+> OIDs, none of which I map to a commitment" as "constrained to the empty set"
+> would reject every signature made under every certificate ever issued. Only
+> OIDs present in the mapping are constraints; the rest are invisible to this
+> section.
+>
+> **Which profile gets which constraint remains deployment policy.** The
+> mechanism is here so that two implementations reach the same verdict on the
+> same certificate; the choice of what to constrain belongs to the issuer, in
+> its certificate policy, where it can be audited.
 
 > **The specification does not forbid automated `approval` or `receipt`
 > globally.** An automated receipt confirmation is entirely legitimate — a
@@ -1342,9 +1415,19 @@ every case. What a vector pins is bytes, not language.
 
 **Still to publish** — the v5 *category* cases (§a.11): human, automated, an
 automated `creation` under a human `approval`, a certificate/category mismatch
-expected `invalid`, and a v4 block read by a v5 verifier. They need a throwaway
-CA that carries category assertions, and shipping them half-made would be worse
-than naming them here. Tracked under Open decisions.
+expected `invalid`, a **commitment exceeding its constraint** (§a.11.3), and a
+v4 block read by a v5 verifier. They need a throwaway CA that carries category
+and constraint assertions, and shipping them half-made would be worse than
+naming them here. Tracked under Open decisions.
+
+> *(v1.9)* The **reading** side of §a.11.2 and §a.11.3 is covered without them:
+> `reference/test/certpolicy.test.mjs` runs against recorded certificates that
+> really carry these OIDs, including one that carries policy OIDs of other
+> kinds and must therefore come out unconstrained. What is missing is a signed
+> *document* vector, and the gap has a cause worth naming: `mades-sign` signs
+> with a raw key by design (§c.3 — issuing certificates needs a CA, an identity
+> check and a confirmation channel), so this repository cannot produce one
+> without becoming something it deliberately is not.
 
 ## f. Integration in existing flows
 
