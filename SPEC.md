@@ -1614,6 +1614,26 @@ each item is additive, and each says what unblocks it.
 - **The v5 category vectors** (§e) — five cases including a negative one. Needs
   a throwaway CA that carries category assertions (§a.11.2). Publishing them
   half-made would be worse than naming them here.
+- **What configures the trust store** (§c.4, §a.11.2, §g) — the conformance
+  clause requires validation *against a configurable trust store*, and this
+  specification never says what a configuration contains or how a verifier
+  obtains one. Two properties are known to matter, and each is easy to get
+  wrong independently:
+  - **service type.** An anchor trusted to timestamp is not thereby trusted to
+    say *who signed*. Without this distinction a timestamping authority can
+    vouch for a signatory. A certificate authorised for both appears twice, one
+    entry per service — the shape the EU trusted list already uses.
+  - **the date a status took effect.** Trust is evaluated at a *moment* (§c.3).
+    An entry carrying only "trusted / not trusted" makes removing an issuer
+    retroactive: signatures that were sound when made stop verifying. The entry
+    must say since when its status holds, and a verifier must compare that
+    against the signing time.
+
+  A serialised, signed list at a stable address would let independent readers
+  reach the same answer without each shipping its own opinion. Deliberately
+  unspecified for now: three implementations consume trust stores today, and
+  inventing a format before they have compared notes is exactly how §a.14 went
+  wrong in v1.6. Unblocked by those three agreeing on the shape.
 - **`automation` vocabulary** (§a.11.1) — three values registered; deliberately
   open. The question is not *which values* but whether a lightweight registry
   becomes necessary once more than one deployment coins terms.

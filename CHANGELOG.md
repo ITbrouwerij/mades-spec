@@ -53,6 +53,14 @@ ground alone.
 - Additive: no certificate in existence asserts these OIDs, so every document
   signed to date reads exactly as before. MINOR, not MAJOR.
 
+**One new open decision: what configures the trust store.** §g requires
+validation against a *configurable* trust store and the specification never says
+what a configuration holds. Two properties are named because both are easy to
+get wrong on your own — the service an anchor is trusted for, and the date a
+status took effect — and the format is deliberately left open: three
+implementations consume trust stores today, and inventing one before they have
+compared notes is how §a.14 went wrong in v1.6.
+
 ---
 
 ## v1.8.1 — 2026-08-20
