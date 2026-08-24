@@ -53,13 +53,33 @@ ground alone.
 - Additive: no certificate in existence asserts these OIDs, so every document
   signed to date reads exactly as before. MINOR, not MAJOR.
 
-**One new open decision: what configures the trust store.** §g requires
-validation against a *configurable* trust store and the specification never says
-what a configuration holds. Two properties are named because both are easy to
-get wrong on your own — the service an anchor is trusted for, and the date a
-status took effect — and the format is deliberately left open: three
-implementations consume trust stores today, and inventing one before they have
-compared notes is how §a.14 went wrong in v1.6.
+**§c.4.1: the trusted-anchor list.** Third normative addition, and the third
+demonstrated defect rather than an improvement. §g requires validation against a
+*configurable* trust store and nothing said what a configuration holds or how a
+verifier obtains one — so an independent reader implementation could ship a
+snapshot and had no defined way to refresh it.
+
+- The list is **itself a MAdES-signed markdown document**. No second format, no
+  second parser, no second verification path: a reader that can check a contract
+  can check the list that tells it whom to trust, and a human can open it and
+  read who is on it.
+- An entry carries the certificate (bound by SHA-256 of its DER, as `covers`
+  binds a claim to a file), the **service** it is trusted for, its **status**,
+  and the **date that status took effect**. The last two are what implementations
+  get wrong alone: without the service, a timestamping authority can vouch for a
+  signatory; without the date, withdrawing an issuer is retroactive and
+  signatures sound when made stop verifying.
+- `granted` / `undersupervision` / `withdrawn` are ETSI TS 119 612's terms, and
+  a certificate authorised for two services appears twice — the EU trusted list's
+  own shape, so an import from it is one to one.
+- Bootstrapping is pinned and rotation is a **hand-over**: a new list-signing key
+  is announced by a list signed with the previous one. A failed refresh keeps the
+  last accepted list and reports it stale — never falls back to trusting nothing
+  (every existing signature would turn unverifiable at once) and never to
+  trusting everything.
+- Who signs the list stays deployment policy, like every other question of who
+  may commit to what. What is required is that the block carries its category, so
+  a reader can tell whether a person or a machine put it there.
 
 ---
 

@@ -1195,6 +1195,106 @@ judgement.
 > exact software and firmware versions of the generating device**; retain
 > everything for the CA's lifetime plus the retention period.
 
+#### c.4.1 The trusted-anchor list *(v1.9)*
+
+§g requires validation *against a configurable trust store*, and until this
+version nothing said what a configuration holds or how a verifier obtains one.
+The gap was demonstrated rather than argued: an independent reader
+implementation could ship a snapshot but had no defined way to refresh it, and
+three implementations were about to invent three answers.
+
+**The list is itself a MAdES-signed markdown document.** Not a second format
+with a second parser and a second verification path — the same procedure of §a.5
+that a verifier already implements, applied to one more file. A reader that can
+check a contract can check the list that tells it whom to trust, and a human can
+open the file and read who is on it.
+
+##### The entry
+
+Each entry answers four questions, and the last two are the ones an
+implementation gets wrong on its own:
+
+| | |
+|---|---|
+| **which** certificate | binding by digest, see below |
+| **what for** — `signing` or `timestamping` | an anchor trusted to timestamp is **not** thereby trusted to say who signed. Without this, a timestamping authority can vouch for a signatory. A certificate authorised for both appears **twice**, one entry per service — the shape the EU trusted list already uses, so an import from it is one to one. |
+| **status** — `granted`, `undersupervision`, `withdrawn` | the terms of ETSI TS 119 612, deliberately, for the same reason |
+| **since** when that status holds | trust is evaluated at a **moment** (§c.3). An entry carrying only *trusted / not trusted* makes removing an issuer retroactive: signatures that were sound when made stop verifying. |
+
+##### The shape
+
+A table, and one fenced `certificate` block per entry:
+
+```
+| service      | status   | since      | sha256           | subject                |
+|--------------|----------|------------|------------------|------------------------|
+| signing      | granted  | 2026-08-06 | 9f2c…            | CN=Example Root CA     |
+| timestamping | granted  | 2026-08-06 | 9f2c…            | CN=Example Root CA     |
+```
+
+Normative:
+
+- `service` is `signing` or `timestamping`. **Closed vocabulary.** An entry with
+  any other value is `unsupported` — the verifier reports it and MUST NOT use it
+  for either purpose.
+- `status` is `granted`, `undersupervision` or `withdrawn`. **Closed.**
+- `since` is a date in `YYYY-MM-DD`, interpreted as `00:00:00Z`.
+- `sha256` is the lowercase hex SHA-256 of the certificate's **DER**. It binds
+  the row to the material, exactly as `covers` binds a claim to a file (§a.12).
+- `subject` is for the human reader. A verifier MUST NOT decide anything on it;
+  the digest is the binding.
+- The certificates travel in the same document, each in a fenced block tagged
+  `certificate`, PEM-encoded. **A row whose digest matches no block is reported
+  as unusable and skipped — never silently dropped.** A trust list that quietly
+  loses an entry is a trust list that quietly stops trusting someone.
+
+##### Evaluating an entry
+
+A verifier asks *was this anchor recognised at the relevant moment?* — the
+signing time, or the timestamp that carries it (§c.5). Not *is it recognised
+now*:
+
+- `granted` — recognised from `since` onward. Before that date it was not yet
+  known, and a signature made earlier is not anchored by it.
+- `withdrawn` — recognised **before** `since`, and not one second after. This is
+  the rule the whole table exists for.
+- `undersupervision` — never recognised. It is the state *before* a grant, not a
+  weaker form of it; treating it as trusted recognises a service that has not
+  been recognised.
+
+##### Bootstrapping and rotation
+
+A verifier that fetched its trust list over the network before it could verify
+anything would have no way to check what it received. So:
+
+- An implementation **SHOULD ship a snapshot** of the list, and **MUST ship the
+  anchor that verifies the list's own signature**, pinned. First run works with
+  no network — which is the whole point of a portable signed document.
+- A refreshed list **MUST verify against the pinned anchor** before it replaces
+  anything.
+- **Rotation is a hand-over, not a replacement.** A new list-signing key is
+  announced by a list signed with the *previous* key. A verifier that accepts
+  such a list pins the new anchor and keeps the old one for lists signed before
+  the hand-over. Without this, replacing the key means shipping new software to
+  everyone.
+- If a refresh cannot be fetched or does not verify, the verifier **keeps the
+  last list it accepted** and reports that it is stale. It MUST NOT fall back to
+  trusting nothing (every existing signature turns unverifiable at once), and
+  MUST NOT fall back to trusting everything.
+
+> **Whether a person or a machine signs the list is deployment policy**, like
+> every other question of who may commit to what (§a.11.3). What this
+> specification requires is that the block carries its category (§a.11.1) so a
+> reader can tell which it was. A deployment that wants a human in the loop at
+> the moment an issuer is withdrawn expresses that in its certificate policy,
+> where it can be audited.
+
+> **A trust list is not a precondition for AdES** (§c.4), and this section does
+> not make it one. It describes how a verifier that *has* a configurable store
+> configures it interoperably. A verifier whose operator manages anchors by hand
+> remains conformant, and §c.4's rule stands: a reader must always be able to add
+> an anchor of their own.
+
 ### c.5 Timestamping
 
 `timestamp` carries a base64 RFC 3161 TimeStampToken over the `signature` value.
@@ -1420,6 +1520,13 @@ v4 block read by a v5 verifier. They need a throwaway CA that carries category
 and constraint assertions, and shipping them half-made would be worse than
 naming them here. Tracked under Open decisions.
 
+> *(v1.9)* `mades-verify` does **not** read a trusted-anchor list (§c.4.1). It
+> takes anchors one at a time with `--anchor`, which is enough to check a chain
+> and not enough to evaluate a status at a moment. Named here rather than left to
+> be discovered: a specification whose own reference does not implement its
+> normative text is exactly the defect this release fixed in §a.11.3, and it
+> would be poor form to leave a second one unmarked.
+>
 > *(v1.9)* The **reading** side of §a.11.2 and §a.11.3 is covered without them:
 > `reference/test/certpolicy.test.mjs` runs against recorded certificates that
 > really carry these OIDs, including one that carries policy OIDs of other
@@ -1485,7 +1592,7 @@ expires.
 
 **Conformance:** a conformant implementation MUST verify the **Machine, Signed
 and Advanced** profiles at **B-B and B-T**, including in-block chain validation
-against a configurable trust store, timestamp validation (§c.5), the
+against a configurable trust store (§c.4.1), timestamp validation (§c.5), the
 appearance-digest check (§a.8), commitment reporting, **the signer category
 with its certificate-consistency and commitment-constraint checks (§a.11)**,
 the trust-anchor outcome, total parsing with the `unsupported` outcome (§a.1,
@@ -1614,26 +1721,6 @@ each item is additive, and each says what unblocks it.
 - **The v5 category vectors** (§e) — five cases including a negative one. Needs
   a throwaway CA that carries category assertions (§a.11.2). Publishing them
   half-made would be worse than naming them here.
-- **What configures the trust store** (§c.4, §a.11.2, §g) — the conformance
-  clause requires validation *against a configurable trust store*, and this
-  specification never says what a configuration contains or how a verifier
-  obtains one. Two properties are known to matter, and each is easy to get
-  wrong independently:
-  - **service type.** An anchor trusted to timestamp is not thereby trusted to
-    say *who signed*. Without this distinction a timestamping authority can
-    vouch for a signatory. A certificate authorised for both appears twice, one
-    entry per service — the shape the EU trusted list already uses.
-  - **the date a status took effect.** Trust is evaluated at a *moment* (§c.3).
-    An entry carrying only "trusted / not trusted" makes removing an issuer
-    retroactive: signatures that were sound when made stop verifying. The entry
-    must say since when its status holds, and a verifier must compare that
-    against the signing time.
-
-  A serialised, signed list at a stable address would let independent readers
-  reach the same answer without each shipping its own opinion. Deliberately
-  unspecified for now: three implementations consume trust stores today, and
-  inventing a format before they have compared notes is exactly how §a.14 went
-  wrong in v1.6. Unblocked by those three agreeing on the shape.
 - **`automation` vocabulary** (§a.11.1) — three values registered; deliberately
   open. The question is not *which values* but whether a lightweight registry
   becomes necessary once more than one deployment coins terms.
