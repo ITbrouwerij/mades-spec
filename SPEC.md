@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.9 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
+> **Status:** Specification · **Version:** 1.10 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -487,24 +487,71 @@ image that was signed without parsing SVG.
 > the claim §a.11 exists to prevent. Automated signatures use `seal` or `none`
 > (§a.11.4).
 
-**Layout contract (normative).** So that two implementations produce the same
-seal rather than two that merely resemble each other:
+**Layout contract (normative).** Two implementations should produce seals a
+reader recognises as the same kind of object. What follows is therefore split:
+what a seal must SAY, what it must not DO, and — separately, and not binding —
+one worked layout.
 
-- `signature`: 560 × 186 px, `viewBox="0 0 560 186"`. Regions: status label and
-  check top; written name over a rule, printed name, address, commitment + time
-  in the left column (x = 24…330); issuer and fingerprint in the right column
-  (x = 378…); a footer strip of 30 px height across the bottom.
-- `seal`: 560 × 92 px, single row.
+*Required content (normative).* Signer name, address, commitment, signing time
+**including the hour and the UTC offset**, issuer common name, and a short
+order-independent fingerprint of what is being signed. **(v5)** For
+`signer-kind: automated`, the seal MUST additionally carry the category in words
+(§a.11.4).
+
+*Invariants (normative).*
+
+- **Two axes, kept apart.** WHO signed and WHO issued the credential occupy
+  separate regions. They answer different questions, and a reader who reads them
+  as one has been told something untrue.
+- **A seal states, it does not judge.** It MUST NOT carry a verdict about its
+  own validity — no check mark, no tick, no colour whose meaning is "valid", no
+  wording that asserts the signature verifies. The image travels inside the
+  signed content and is reproduced unchanged from that moment onward, so any
+  verdict it carries is frozen at signing time. A green check beside a "content
+  changed" banner is the failure this rule exists to prevent.
+- **The name is set text.** It MUST NOT be drawn in a script or handwriting-like
+  face, and MUST NOT be placed over a signature rule, unless the signer actually
+  drew it. A typeface imitating handwriting asserts a gesture that never
+  happened; §a.11.4 forbids it for machines, and it is no more true of a person
+  who typed nothing.
+- **A declared box.** The image MUST carry a `viewBox` with origin `0 0` and MUST
+  NOT depend on the renderer's default size, so it scales predictably in a
+  column of text.
 - The **footer strip** is the slot for the party that ran the ceremony, with an
-  optional logo of at most 19 × 18 px. It is deliberately separate from the
-  issuer column: **the certificate authority vouches for the identity; the
-  platform ran the process.** Placing both on one line asserts something untrue,
-  and a disputed signature turns on exactly that distinction. An implementation
-  that omits the strip is conformant.
-- Required content: signer name, address, commitment, signing time **including
-  the hour and the UTC offset**, issuer common name, and a short order-independent
-  fingerprint of what is being signed. **(v5)** For `signer-kind: automated`,
-  the seal MUST additionally carry the category in words (§a.11.4).
+  optional logo. It is deliberately separate from the issuer region: **the
+  certificate authority vouches for the identity; the platform ran the process.**
+  Placing both on one line asserts something untrue, and a disputed signature
+  turns on exactly that distinction. An implementation that omits the strip is
+  conformant.
+
+*A worked layout (non-normative).* The reference implementation in this
+repository signs and verifies; it draws no appearance, so nothing here is
+generated from it. What follows is one shipped layout, offered as a starting
+point and not as a requirement: `signature` at 560 × 104 px and `seal` at
+560 × 92 px, both on a 24 px margin, with a small uppercase label on each axis
+at the top, the signer's name and the signing time in the left region, the
+issuer and the fingerprint right-aligned in the right region, and a footer strip
+across the bottom carrying the address, the commitment and the platform slot.
+Matching it is neither required nor a conformance claim.
+
+> **Why this is no longer an exact pixel grid.** It was, through v1.9: 560 × 186
+> with named regions and a check mark, so that two implementations would produce
+> the same seal. Two things were wrong with that, and both were found by
+> building it.
+>
+> The check mark was **required** here and **forbidden** three paragraphs above:
+> a verifier must not present an appearance as authoritative before verifying,
+> and a check mark inside the signed bytes does exactly that, permanently. The
+> text contradicted itself and an implementation had to pick a side.
+>
+> And the grid pinned one vendor's design decisions — a handwriting-style name
+> over a rule among them — as a normative requirement on every renderer. The first
+> implementation to improve its seal became non-conformant for reasons that had
+> nothing to do with interoperability. Nothing about a signature's meaning
+> depends on a name sitting at y = 110.
+>
+> What has to hold between implementations is that a reader is told the same
+> things and is not told a lie. That is what is normative above.
 
 **Determinism (normative).** The SVG source bytes are part of the signing input,
 so they MUST be reproducible: no generated element ids, no render timestamp, no

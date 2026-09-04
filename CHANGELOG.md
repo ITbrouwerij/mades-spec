@@ -9,6 +9,58 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.10 — 2026-09-04
+
+**§a.8's layout contract contradicted itself, and it pinned one vendor's design
+as a normative requirement on every renderer.** Both were found by building a seal, not
+by reading the text.
+
+The clause **required** a check mark in the `signature` layout. Three paragraphs
+above, the same section says a verifier MUST NOT present an appearance as
+authoritative before verifying the signature — and a check mark inside the
+signed bytes does exactly that, permanently: it is frozen at signing time and
+still reads "valid" beside a "content changed" banner years later. An
+implementation had to disobey one of the two.
+
+The rest of the grid — 560 × 186, named regions, a handwriting-style name over a
+signature rule — described one product's seal at one moment. The first
+implementation to improve its design became non-conformant for reasons that had
+nothing to do with interoperability. Nothing about a signature's meaning depends
+on a name sitting at y = 110.
+
+- The layout contract is now split into **required content**, **invariants**,
+  and a **worked layout that is not binding**.
+- New normative invariants: a seal MUST NOT carry a verdict about its own
+  validity (no check mark, no "valid" colour, no wording that asserts the
+  signature verifies); the signer's name MUST NOT be drawn in a handwriting-like
+  face or over a signature rule unless the signer actually drew it; the two axes
+  — who signed, who issued — stay in separate regions; the image carries a
+  `viewBox` with origin `0 0`.
+- The check mark requirement is **removed**. The prohibition above it stands.
+- Required content is unchanged, including the hour and UTC offset in the
+  signing time and, for `signer-kind: automated`, the category in words
+  (§a.11.4).
+- The 19 × 18 px cap on the footer logo is dropped; the footer remains a slot.
+
+**MINOR and not MAJOR: no existing document stops verifying.** The appearance is
+signed as bytes and reconstructed as bytes; nothing in verification reads its
+geometry, so every document already in the world keeps the verdict it had.
+
+**But two of the new invariants do bind what you draw next**, and a seal built
+to the v1.9 grid will meet neither. That grid required a check mark, now
+forbidden; and it placed a written name over a rule, which is forbidden unless
+the signer actually drew it. Both were prescribed by the text being corrected,
+so an implementation that followed v1.9 to the letter is not at fault — it is
+the reason this version exists. Neither change touches a signed byte: redraw at
+the next release, not for the documents behind you.
+
+A product that captures a real drawn signature keeps drawing it. What is
+forbidden is imitating one — a script face applied to a name the signer typed
+asserts a gesture that never happened, which is §a.11.4's argument about
+machines applied to the case it did not name.
+
+---
+
 ## v1.9 — 2026-08-22
 
 **§a.11.3 has an encoding.** It said "the mechanism is specified here" and
