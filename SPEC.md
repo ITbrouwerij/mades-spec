@@ -1,9 +1,10 @@
-> **Status:** Specification · **Version:** 1.10.1 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
+> **Status:** Specification · **Version:** 1.11 (stable — see §0.2) · **Block `version: 5`** · **Implementation:** `@itbrouwerij/mades-verify` (npm, MIT), with a command line in `reference/`
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
-> anyone can implement it. The reference implementation and the
-> interoperability vectors live in this repository. Vecto Proof is *a* consumer
+> anyone can implement it. The interoperability vectors live in this
+> repository, with a command line around `@itbrouwerij/mades-verify`, the
+> implementation that is held to them. Vecto Proof is *a* consumer
 > of this specification — the first of three, and where most of the findings
 > below were first measured — but it holds no privileged position in what
 > follows.
@@ -524,14 +525,14 @@ order-independent fingerprint of what is being signed. **(v5)** For
   turns on exactly that distinction. An implementation that omits the strip is
   conformant.
 
-*A worked layout (non-normative).* The reference implementation in this
-repository signs and verifies; it draws no appearance, so nothing here is
-generated from it. What follows is one shipped layout, offered as a starting
-point and not as a requirement: `signature` at 560 × 104 px and `seal` at
-560 × 92 px, both on a 24 px margin, with a small uppercase label on each axis
-at the top, the signer's name and the signing time in the left region, the
-issuer and the fingerprint right-aligned in the right region, and a footer strip
-across the bottom carrying the address, the commitment and the platform slot.
+*A worked layout (non-normative).* The command line in this repository signs
+and verifies; it draws no appearance, so nothing here is generated from it.
+What follows is one shipped layout, offered as a starting point and not as a
+requirement: `signature` at 560 × 104 px and `seal` at 560 × 92 px, both on a
+24 px margin, with a small uppercase label on each axis at the top, the signer's
+name and the signing time in the left region, the issuer and the fingerprint
+right-aligned in the right region, and a footer strip across the bottom carrying
+the address, the commitment and the platform slot.
 Matching it is neither required nor a conformance claim.
 
 > **Why this is no longer an exact pixel grid.** It was, through v1.9: 560 × 186
@@ -765,8 +766,8 @@ commitment, exactly as for categories.
 - An automated signature **MUST NOT be rendered in a form primarily associated
   with human signatures**: no handwritten-style name, no `appearance.mode:
   signature` (§a.8), no wording that reads as endorsement.
-- Recommended wording, and what the reference implementation uses: **"prepared
-  by"** rather than "signed by" — delivered, not endorsed.
+- Recommended wording: **"prepared by"** rather than "signed by" — delivered,
+  not endorsed.
 - A pre-v5 block is labelled **"signer category unspecified"**, never "human".
 
 #### a.11.5 Fixing a version is a signature (informative)
@@ -1475,6 +1476,14 @@ scheme"* — never *"invalid signature"*.
 
 ## e. Tooling (reference implementation)
 
+*(v1.11)* The implementation is **`@itbrouwerij/mades-verify`**, published on npm
+under MIT. This repository keeps the text, the examples and the vectors, and two
+command lines around the package in `reference/`: `mades-verify` and
+`mades-sign`. They implement a subset of the options below; `reference/README.md`
+lists which. Until v1.10.1 `reference/` carried an implementation of its own,
+beside the one that signs real documents: two readings of one format, free to
+drift apart.
+
 - **`mades-sign`** — `--key`/`--cert-chain` or a CSR flow, `--tsa <url>`,
   `--commitment`, `--signer-kind`, `--automation`, `--format raw|jws`,
   `--appearance signature|seal|none`, `--lang`, `--brand`, `--represents`,
@@ -1502,12 +1511,12 @@ implementation that stores only the digest produces genuine signatures nobody
 can verify.
 
 **Interoperability vectors (published, `vectors/`).** The statements below are
-backed by files in this repository, and `reference/test/` reads every one of
-them on every run — a vector the reference implementation cannot itself pass
-proves nothing. Until v1.8 this section *described* vectors that lived in one
-vendor's product tree, where no second implementer could find them; a
-specification that points at evidence its own publication does not carry is
-asserting, not showing.
+backed by files in this repository, and `reference/test/` runs every one of
+them through `@itbrouwerij/mades-verify` on every run — a vector no
+implementation passes proves nothing. Until v1.8 this section *described*
+vectors that lived in one vendor's product tree, where no second implementer
+could find them; a specification that points at evidence its own publication
+does not carry is asserting, not showing.
 
 - **`canonicalisation-vectors.json`** — §a.2 over fifteen inputs: BOM, CRLF,
   lone CR, trailing whitespace, missing and multiple trailing newlines, leading
@@ -1588,12 +1597,13 @@ v4 block read by a v5 verifier. They need a throwaway CA that carries category
 and constraint assertions, and shipping them half-made would be worse than
 naming them here. Tracked under Open decisions.
 
-> *(v1.9)* `mades-verify` does **not** read a trusted-anchor list (§c.4.1). It
-> takes anchors one at a time with `--anchor`, which is enough to check a chain
-> and not enough to evaluate a status at a moment. Named here rather than left to
-> be discovered: a specification whose own reference does not implement its
-> normative text is exactly the defect this release fixed in §a.11.3, and it
-> would be poor form to leave a second one unmarked.
+> *(v1.9)* The `mades-verify` command line does **not** read a trusted-anchor
+> list (§c.4.1). It takes anchors one at a time with `--anchor`, which is
+> enough to check a chain and not enough to evaluate a status at a moment.
+> Named here rather than left to be discovered: a specification whose own
+> reference does not implement its normative text is exactly the defect this
+> release fixed in §a.11.3, and it would be poor form to leave a second one
+> unmarked.
 >
 > *(v1.9)* The **reading** side of §a.11.2 and §a.11.3 is covered without them:
 > `certificate-policy-vectors.json` (a reference test until v1.10.1) holds
@@ -1681,7 +1691,8 @@ Orchestrating engines SHOULD additionally keep an out-of-band evidence record
 **Done** (as of v1.8): the comment form, the three appearance modes, the signer
 category, archive timestamps and the document boundary; a reference
 implementation and published interoperability vectors in this repository; three
-independent implementations in production use.
+independent implementations in production use. *(v1.11)* The implementation is
+`@itbrouwerij/mades-verify` on npm, held to the vectors that stay here.
 
 **Next:** `format: jws` · `.well-known/mades-keys` · the v5 category vectors
 (§e) · a desktop reader with a proper validation report (§d Level 3) ·
@@ -1790,6 +1801,10 @@ each item is additive, and each says what unblocks it.
 - **The v5 category vectors** (§e) — five cases including a negative one. Needs
   a throwaway CA that carries category assertions (§a.11.2). Publishing them
   half-made would be worse than naming them here.
+- **A certificate asserting both categories** (§a.11.2) — the text does not say.
+  The implementation reads it as asserting none, so *asserted but not
+  anchored*; the reference before v1.11 reported a failure. Unblocked by a
+  decision and a certificate to pin it in `certificate-policy-vectors.json`.
 - **`automation` vocabulary** (§a.11.1) — three values registered; deliberately
   open. The question is not *which values* but whether a lightweight registry
   becomes necessary once more than one deployment coins terms.

@@ -1,14 +1,17 @@
 {
   "name": "@itbrouwerij/mades-spec",
-  "version": "1.3.0",
-  "description": "MAdES — Markdown Advanced Electronic Signatures: spec + reference implementation",
+  "version": "1.11.0",
+  "description": "MAdES — Markdown Advanced Electronic Signatures: the specification, its vectors, and a command line around @itbrouwerij/mades-verify",
   "type": "module",
   "bin": {
     "mades-sign": "./reference/mades-sign.mjs",
     "mades-verify": "./reference/mades-verify.mjs"
   },
   "scripts": {
-    "test": "node --test reference/test/mades.test.mjs reference/test/vectors.test.mjs reference/test/certpolicy.test.mjs"
+    "test": "node --test reference/test/mades.test.mjs reference/test/vectors.test.mjs reference/test/certpolicy.test.mjs reference/test/cli.test.mjs"
+  },
+  "dependencies": {
+    "@itbrouwerij/mades-verify": "^1.5.2"
   },
   "keywords": [
     "markdown",

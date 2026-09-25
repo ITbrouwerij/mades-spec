@@ -27,6 +27,13 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      - name: Install
+        # The implementation, @itbrouwerij/mades-verify, from the public npm
+        # registry and at the version package-lock.json records. No token and
+        # no secret: the tests must run for anyone who opens a pull request,
+        # including from a fork, where a workflow gets no secrets at all.
+        run: npm ci --no-audit --no-fund
+
       - name: Run tests
         # `npm test`, so the set of tests is defined in ONE place. This step
         # used to name a test file directly, and when that file was renamed the

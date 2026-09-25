@@ -1,40 +1,48 @@
 /**
- * The published vectors, read back — every release, not once.
+ * The published vectors, run through the implementation — every release, not once.
  *
  * WHY THIS FILE EXISTS. The specification referenced "published vectors" for two
- * versions while the repository contained none: they lived inside one vendor's
- * product tree, where no second implementer could find them. A specification
- * that points at evidence its own publication does not carry is asserting, not
- * showing. From v1.8 the vectors live here, and this suite is what keeps them
- * from drifting: a vector the reference implementation cannot itself pass
- * proves nothing (§e).
+ * versions while the repository contained none. A specification that points at
+ * evidence its own publication does not carry is asserting, not showing. From
+ * v1.8 the vectors live here, and this suite is what keeps them honest: a vector
+ * no implementation passes proves nothing (§e).
  *
- * WHAT IS AND IS NOT CHECKED HERE. Canonicalisation, boundary and block vectors
- * are verified in full — those rules live entirely in this repository. For the
- * signed vectors (v4, v5, archive layers, the examples) this suite verifies what
- * the reference implements: block discovery, total parsing, signing-input
- * reconstruction and raw signature verification. RFC 3161 token validation and
- * certificate-chain trust are implementation concerns (§c.5) and are pinned by
- * the `expect` blocks inside the files, which a full implementation reads.
- * The certificate-policy vectors (§a.11.2, §a.11.3) are read by
- * certpolicy.test.mjs, next to the module they test.
+ * WHICH IMPLEMENTATION (v1.11). Until v1.11 this suite ran a reference
+ * implementation that lived in this repository, beside the implementation that
+ * signs real documents: two readings of one format, free to drift. MAdES has
+ * one implementation now, `@itbrouwerij/mades-verify` from npm, and this suite
+ * runs every vector file through it at the version package.json allows.
+ *
+ * WHAT IS CHECKED. Every expectation a file states. That includes what the
+ * former reference could not check and left to "a full implementation": the
+ * per-layer verdicts of the archive vectors, against their RFC 3161 tokens.
+ * The certificate-policy vectors are read by certpolicy.test.mjs.
  */
 import { strict as assert } from 'node:assert';
-import { createHash, createPublicKey, createVerify, verify as verifyRaw, X509Certificate } from 'node:crypto';
+import { createHash, createPublicKey, X509Certificate } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
   canonicalize,
+  documentBoundary,
   findBlocks,
   normalize,
+  ontleedVatl,
   parseBlockBody,
+  parseCoversEntry,
   signingInputForBlock,
-  trailingContent,
-} from '../mades-canon.mjs';
+  verifyArchiveLayers,
+  verifySignature,
+  vermeldingenVanPem,
+} from '@itbrouwerij/mades-verify';
+import { nodePoort } from '@itbrouwerij/mades-verify/node';
 
 const vec = (name) =>
   JSON.parse(readFileSync(new URL(`../../vectors/${name}`, import.meta.url), 'utf8'));
+
+const sha256hex = (text) => `sha256:${createHash('sha256').update(text, 'utf8').digest('hex')}`;
+const sha256b64 = (text) => createHash('sha256').update(text, 'utf8').digest('base64');
 
 /**
  * The signing input of one case, decoded according to what the FILE declares.
@@ -63,10 +71,7 @@ describe('canonicalisation vectors (§a.2)', () => {
     it(c.name, () => {
       const canonical = normalize(c.input);
       assert.equal(canonical, c.canonical);
-      assert.equal(
-        `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`,
-        c.digest
-      );
+      assert.equal(sha256hex(canonical), c.digest);
     });
   }
 });
@@ -82,83 +87,7 @@ describe('boundary vectors (§a.14)', () => {
 
   for (const c of cases) {
     it(`${c.conforming ? 'conforming' : 'non-conforming'}: ${c.name}`, () => {
-      assert.equal(trailingContent(c.document) === '', c.conforming);
-    });
-  }
-});
-
-// ---------------------------------------------------------------------------
-
-describe('v4 vectors — signing-input reconstruction and signatures', () => {
-  const v4 = vec('mades-v4-vectors.json');
-  const key = createPublicKey(v4.key.publicKeyPem);
-
-  for (const c of v4.cases) {
-    it(c.name, () => {
-      const blocks = findBlocks(c.document);
-      assert.ok(blocks.length >= 1, 'no block found');
-      // The file SAYS how its signing input is encoded (v1.8.1). This was
-      // hard-coded as "v4 is base64" — correct, and unavailable to anyone who
-      // had not read this file. A second implementer hit it within days.
-      const recorded = decodeSigningInput(v4, c);
-      // The LAST block is the one the vector records; earlier ones are what a
-      // counter-signature case counters.
-      const derived = signingInputForBlock(c.document, blocks.length - 1);
-      assert.equal(derived.unparsed.length, 0, 'the block must parse totally');
-      assert.equal(derived.signingInput, recorded, 'signing input drifted');
-      assert.equal(
-        createHash('sha256').update(recorded, 'utf8').digest('base64'),
-        c.digestSha256Base64,
-        'the recorded digest is not the digest of the recorded input'
-      );
-      assert.ok(
-        verifyRaw(null, Buffer.from(recorded, 'utf8'), key, Buffer.from(c.signature, 'base64')),
-        'the recorded signature does not verify over the reconstructed input'
-      );
-    });
-  }
-});
-
-describe('v5 vector — a real ceremony, reconstructed from the file alone', () => {
-  const v5 = vec('mades-v5-vectors.json');
-
-  for (const c of v5.cases) {
-    it(c.name, () => {
-      const blocks = findBlocks(c.document);
-      const derived = signingInputForBlock(c.document, blocks.length - 1);
-      assert.equal(derived.unparsed.length, 0);
-      const recorded = decodeSigningInput(v5, c);
-      assert.equal(derived.signingInput, recorded, 'signing input drifted');
-      assert.equal(
-        createHash('sha256').update(recorded, 'utf8').digest('base64'),
-        c.signedDigestB64,
-        'the digest the service signed is not the digest of this input'
-      );
-      // The leaf certificate carries the key; the signature is over the digest
-      // path the CSC service uses. What matters for the SPEC is that the leaf
-      // parses and belongs to the block — trust is the verifier's question (§c.4).
-      const leaf = new X509Certificate(
-        `-----BEGIN CERTIFICATE-----\n${c.certificateChain[0]}\n-----END CERTIFICATE-----`
-      );
-      assert.ok(leaf.subject.length > 0);
-    });
-  }
-});
-
-describe('archive-layer vectors (§a.13)', () => {
-  const lta = vec('mades-lta-vectors.json');
-
-  for (const c of lta.cases) {
-    it(c.name, () => {
-      const blocks = findBlocks(c.document);
-      const sigs = blocks.filter((b) => b.kind === 'sig');
-      const layers = blocks.filter((b) => b.kind === 'archive-ts');
-      // One index space — a layer covers every block above it (§a.13). The
-      // full per-layer verdicts in `expect` are for implementations that
-      // validate RFC 3161 tokens; the reference pins the structure.
-      assert.equal(sigs.length, c.expect.signatures, 'signature count');
-      assert.equal(layers.length, c.expect.layers.length, 'layer count');
-      assert.equal(trailingContent(c.document), '', 'a layered document still ends at its last block');
+      assert.equal(documentBoundary(c.document).ok, c.conforming);
     });
   }
 });
@@ -166,10 +95,9 @@ describe('archive-layer vectors (§a.13)', () => {
 // ---------------------------------------------------------------------------
 
 describe('block vectors (§a.1, §a.3, §a.5, §a.12, §a.13)', () => {
-  // Until v1.10.1 these were cases in mades.test.mjs, where only this
-  // implementation could run them. Each case expects the reading of EVERY block
-  // in its document; `signingInput`, `canonicalContent` and `coversEntries`
-  // appear only where the case is about them.
+  // Each case expects the reading of EVERY block in its document;
+  // `signingInput`, `canonicalContent` and `coversEntries` appear only where the
+  // case is about them.
   const file = vec('block-vectors.json');
 
   for (const c of file.cases) {
@@ -192,14 +120,82 @@ describe('block vectors (§a.1, §a.3, §a.5, §a.12, §a.13)', () => {
           assert.equal(canonicalize(c.document, i), e.canonicalContent, `block ${i}: canonical content`);
         }
         if ('coversEntries' in e) {
-          // §a.12: digest, media type, and the remainder of the line as the name.
-          const entries = fields.covers.map((line) => {
-            const [, digest, mediaType, name] = /^(\S+)[ ](\S+)[ ](.+)$/.exec(line);
-            return { digest, mediaType, name };
-          });
-          assert.deepEqual(entries, e.coversEntries, `block ${i}: covers entries`);
+          assert.deepEqual(fields.covers.map(parseCoversEntry), e.coversEntries, `block ${i}: covers entries`);
         }
       }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+
+describe('v4 vectors — signing-input reconstruction and signatures', () => {
+  const v4 = vec('mades-v4-vectors.json');
+  const key = createPublicKey(v4.key.publicKeyPem);
+
+  for (const c of v4.cases) {
+    it(c.name, async () => {
+      const blocks = findBlocks(c.document);
+      assert.ok(blocks.length >= 1, 'no block found');
+      const recorded = decodeSigningInput(v4, c);
+      // The LAST block is the one the vector records; earlier ones are what a
+      // counter-signature case counters.
+      const derived = signingInputForBlock(c.document, blocks.length - 1);
+      assert.deepEqual(derived.unparsed, [], 'the block must parse totally');
+      assert.equal(derived.signingInput, recorded, 'signing input drifted');
+      assert.equal(sha256b64(recorded), c.digestSha256Base64, 'the recorded digest is not the digest of the recorded input');
+      // The raw-key path (§c.7): the key travels in the file, not in the block.
+      assert.ok(
+        await verifySignature(nodePoort, recorded, Buffer.from(c.signature, 'base64'), { publiekeSleutel: key }, 'ed25519'),
+        'the recorded signature does not verify over the reconstructed input'
+      );
+    });
+  }
+});
+
+describe('v5 vector — a real ceremony, reconstructed from the file alone', () => {
+  const v5 = vec('mades-v5-vectors.json');
+
+  for (const c of v5.cases) {
+    it(c.name, () => {
+      const blocks = findBlocks(c.document);
+      const derived = signingInputForBlock(c.document, blocks.length - 1);
+      assert.deepEqual(derived.unparsed, [], 'the block must parse totally');
+      const recorded = decodeSigningInput(v5, c);
+      assert.equal(derived.signingInput, recorded, 'signing input drifted');
+      assert.equal(sha256b64(recorded), c.signedDigestB64, 'the digest the service signed is not the digest of this input');
+      // Trust in the chain is the verifier's question (§c.4), not this vector's.
+      const leaf = new X509Certificate(Buffer.from(c.certificateChain[0], 'base64'));
+      assert.ok(leaf.subject.length > 0);
+    });
+  }
+});
+
+describe('archive-layer vectors (§a.13)', () => {
+  const lta = vec('mades-lta-vectors.json');
+  let anchors;
+  const tsaAnchors = async () => {
+    anchors ??= (await ontleedVatl(
+      nodePoort,
+      await vermeldingenVanPem(nodePoort, lta.trustRootPem, { dienstsoorten: ['tijdstempel'] })
+    )).ankers;
+    return anchors;
+  };
+
+  for (const c of lta.cases) {
+    it(c.name, async () => {
+      const blocks = findBlocks(c.document);
+      // One index space — a layer covers every block above it.
+      assert.equal(blocks.filter((b) => b.kind === 'sig').length, c.expect.signatures, 'signature count');
+      assert.equal(blocks.filter((b) => b.kind === 'archive-ts').length, c.expect.layers.length, 'layer count');
+      assert.ok(documentBoundary(c.document).ok, 'a layered document still ends at its last block');
+      // The per-layer verdicts, outside-in, against the tokens themselves.
+      const layers = await verifyArchiveLayers(nodePoort, c.document, { ankers: await tsaAnchors() });
+      assert.deepEqual(
+        layers.map((l) => ({ verdict: l.verdict, covers: l.covers })),
+        c.expect.layers,
+        'layer verdicts'
+      );
     });
   }
 });
@@ -223,30 +219,21 @@ describe('example vectors — the signed documents in examples/, from the file a
     return bytes.toString('utf8');
   };
 
-  /** What the reference reads in one document, against what the vector expects of it. */
-  const check = (document, expect) => {
+  const check = async (document, expect) => {
     const blocks = findBlocks(document);
     if (expect.blockKinds) assert.deepEqual(blocks.map((b) => b.kind), expect.blockKinds, 'blocks found');
     const d = signingInputForBlock(document, blocks.length - 1);
-    assert.equal(d.unparsed.length, 0, 'the block must parse totally');
+    assert.deepEqual(d.unparsed, [], 'the block must parse totally');
     assert.equal(d.fields.version, String(file.blockVersion), 'block version');
     if (expect.signerKind) assert.equal(d.fields['signer-kind'], expect.signerKind, 'signer-kind');
-    if (expect.signingInputDigest) {
-      assert.equal(
-        `sha256:${createHash('sha256').update(d.signingInput, 'utf8').digest('hex')}`,
-        expect.signingInputDigest,
-        'signing input digest'
-      );
-    }
+    if (expect.signingInputDigest) assert.equal(sha256hex(d.signingInput), expect.signingInputDigest, 'signing input digest');
     if (expect.signature) {
       // The cryptographic check alone: trust and timestamp are not part of it.
-      assert.equal(d.fields.algorithm, 'rsa-sha256', 'these recordings are rsa-sha256');
-      const leaf = new X509Certificate(Buffer.from(d.fields['certificate-chain'][0], 'base64'));
-      const v = createVerify('sha256');
-      v.update(d.signingInput, 'utf8');
-      assert.equal(v.verify(leaf.publicKey, Buffer.from(d.signature, 'base64')) ? 'valid' : 'invalid', expect.signature, 'signature');
+      const leaf = await nodePoort.certificaat(Buffer.from(d.fields['certificate-chain'][0], 'base64'));
+      const valid = await verifySignature(nodePoort, d.signingInput, Buffer.from(d.signature, 'base64'), leaf, d.fields.algorithm);
+      assert.equal(valid ? 'valid' : 'invalid', expect.signature, 'signature');
     }
-    if ('conforming' in expect) assert.equal(trailingContent(document) === '', expect.conforming, 'document boundary (§a.14)');
+    if ('conforming' in expect) assert.equal(documentBoundary(document).ok, expect.conforming, 'document boundary (§a.14)');
   };
 
   for (const c of file.cases) {
@@ -289,8 +276,8 @@ describe('the vector files describe themselves (§e)', () => {
   });
 
   it('the schema they declare is itself valid JSON', () => {
-    // It was not: from v1.8.1 until v1.10.1 a regular-expression escape made the
-    // schema unparseable, and the check below only asked whether the file existed.
+    // It was not, from v1.8.1 until v1.10.1: a regular-expression escape made it
+    // unparseable, and the check below only asked whether the file existed.
     const schema = JSON.parse(
       readFileSync(new URL('../../vectors/mades-vectors-1.schema.json', import.meta.url), 'utf8')
     );
@@ -302,9 +289,8 @@ describe('the vector files describe themselves (§e)', () => {
       const file = vec(name);
 
       it('declares a schema that exists in this repository', () => {
-        // The declared schema was a URL on a product domain that returned 404
-        // for two releases. A file that points at a schema which does not
-        // resolve is worse than one that points at none: it looks described.
+        // A file that points at a schema which does not resolve is worse than
+        // one that points at none: it looks described.
         const tail = file.$schema.split('/').slice(-2).join('/');
         assert.ok(
           existsSync(new URL(`../../${tail}`, import.meta.url)),

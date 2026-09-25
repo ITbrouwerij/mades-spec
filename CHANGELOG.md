@@ -1,11 +1,69 @@
 # MAdES Specification — Changelog
 
-All notable changes to the MAdES specification. The reference implementation versions track this independently in `reference/package.json`.
+All notable changes to the MAdES specification. The implementation, `@itbrouwerij/mades-verify`, versions itself on npm; `package.json` here follows the specification from v1.11.
 
 Versioning follows [SemVer](https://semver.org) for the spec:
 - **MAJOR** — breaking change to the wire format (existing signed documents may not verify)
 - **MINOR** — additive feature (new optional fields / blocks; existing documents still verify)
 - **PATCH** — clarification, typo fix, non-normative editorial change
+
+---
+
+## v1.11 — 2026-09-25
+
+**MAdES has one implementation, and this repository holds it to the vectors.**
+No normative change.
+
+Until this release `reference/` carried an implementation of its own — a block
+parser, a canonicaliser, a reader of certificate policies — beside the one that
+signs real documents. Two readings of one format drift apart, and nothing in
+either says when: the vectors of v1.10.1 found a line the reference counted as
+unreadable (§a.5) and the other implementation dropped. The implementation is
+now `@itbrouwerij/mades-verify`, published on npm under MIT, and the vectors
+stay here as the norm it is held to.
+
+- `reference/mades-canon.mjs` and `reference/mades-certpolicy.mjs` are
+  removed.
+- `mades-verify` and `mades-sign` stay, with the same invocation, as command
+  lines around the package. Every judgement is the package's.
+- `reference/test/` runs every vector file through the package, at the version
+  `package.json` allows (`^1.5.2`). That includes what the former reference
+  left to "a full implementation": the per-layer verdicts of the archive
+  vectors, against their RFC 3161 tokens. The tests that are not vectors — the
+  writer, round trips, the example files — run against the package too, and
+  new tests run both command lines as a user does. 120/120.
+- `npm install` needs no token and no registry setup. CI installs from the
+  lock file with `npm ci`, so a pull request from a fork runs the tests too.
+- `package.json` moves from 1.3.0, where it had stopped, to 1.11.0.
+
+**What the command lines now do differently**, all of it the package's:
+
+- `mades-verify` verifies the timestamp (§c.5) and archive layers (§a.13)
+  against their tokens, where it used to state them, and checks the appearance
+  against its digest (§a.8).
+- `mades-sign` writes the content above the block in its canonical form (§a.2).
+- `mades-sign` writes a comment line without the category:
+  `# ✓ Signed by alice@example.com — approval — 2026-08-14`. §d says it SHOULD
+  name it (v5), and the former writer did. This is a gap in the implementation,
+  not a change to the rule.
+
+**What went with the former reference**, because the package does otherwise and
+no vector pinned it:
+
+- A signed field whose name carries no namespace. §a.1 makes it `unsupported`;
+  the former verifier reported a failure, and the package lists it among the
+  fields it does not implement (§d level 4) without lowering the verdict.
+  Neither does what §a.1 says. A gap in the implementation.
+- A certificate asserting both categories. The former verifier reported a
+  failure; the package reads it as asserting none. The text does not decide
+  between them, so the question is now under Open decisions.
+
+Editorial: §a.11.4 no longer claims the reference writes "prepared by". Neither
+the former reference nor the package does.
+
+**MINOR and not PATCH**: what the command lines report changes, which a PATCH
+may not do. No signing input, no canonicalisation and no rule changed, so no
+document reads differently under the specification. Block version stays `5`.
 
 ---
 
