@@ -9,6 +9,58 @@ Versioning follows [SemVer](https://semver.org) for the spec:
 
 ---
 
+## v1.10.1 — 2026-09-25
+
+**The cases only the reference could run are vectors now.** No normative
+change; a PATCH under §0.2.
+
+Much of what `reference/test/` checked existed nowhere else: where a block may
+be found, how it parses, what its signing input contains, what a certificate's
+policy OIDs assert, and that the three signed examples verify. A second
+implementation could read those tests and not run them — the position §e says a
+specification must not leave an implementer in.
+
+- `vectors/block-vectors.json` — twenty documents, each with the expected
+  reading of every block in it: kind, the number of lines that cannot be
+  placed, fields, comment lines, and where the case is about them the signing
+  input (§a.3), the input of an archive layer (§a.13) or a `covers` entry split
+  into its parts (§a.12).
+- `vectors/certificate-policy-vectors.json` — the certificates from
+  `certpolicy.test.mjs`, as DER, with their policy OIDs, category, permitted
+  set and the constraint outcome per commitment (§a.11.2, §a.11.3), and the
+  mapping they assume.
+- `vectors/mades-examples-vectors.json` — examples 05, 06 and 07 byte for byte,
+  with the digest of each signing input and the verdict of each signature, and
+  two variants: one character changed, and a clause appended after the block.
+- Two cases added to `canonicalisation-vectors.json` and one to
+  `boundary-vectors.json`. The existing cases are unchanged, byte for byte.
+- `vectors/README.md` describes what the schema leaves open: the shape of a
+  case, per file.
+- The reference tests read these files instead of carrying the cases. 108/108.
+
+One input changed on the way. The two §a.5 cases where a line cannot be placed
+in its container gained `version: 5`: as tests they parsed a bare body, as
+vectors they pin a verdict, and total parsing applies from block version 4.
+
+**Not converted**, because they concern the writer or the reference rather
+than the format: refusing `--` and omitting empty containers when serialising,
+round trips with a freshly generated key, the check that `mades-verify.mjs`
+lists `covers` as a known field, the line-ending checks on the example files,
+and the check that one marker is not a prefix of the other. Tests whose rule an
+existing vector already pins stay tests.
+
+**Found on the way: the schema did not parse.** `mades-vectors-1.schema.json`
+wrote a pattern as `"^[0-9]+\.[0-9]+…"`, and `\.` is not a JSON escape. Every
+vector file has declared that schema since v1.8.1, and no JSON Schema validator
+could load it, because the reference test only asked whether the file existed.
+The escape is fixed, and the test parses the schema.
+
+Also corrected: §e counted the boundary cases as four conforming endings and
+eight non-conforming tails, where they were five conforming documents and seven
+tails; and the README header still said v1.9.
+
+---
+
 ## v1.10 — 2026-09-04
 
 **§a.8's layout contract contradicted itself, and it pinned one vendor's design

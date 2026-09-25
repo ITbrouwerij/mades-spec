@@ -63,6 +63,12 @@
       "name": "an archive-timestamp block is a BLOCK, not trailing content (v1.5 + v1.6 interplay)",
       "document": "# Agreement\n\nThe parties agree.\n\n<!-- mades-sig\n# ✓ Signed by alice@example.com\nversion: 5\nsigner: alice@example.com\nsignature: c2ln\n-->\n\n<!-- mades-archive-ts\nversion: 5\ntimestamp: c2ln\n-->\n",
       "conforming": true
+    },
+    {
+      "name": "a document without blocks has no boundary to report",
+      "note": "Nothing is signed, so nothing lies outside a signature. That the document is unsigned is a different finding, and not this check's to make.",
+      "document": "just some text\n",
+      "conforming": true
     }
   ]
 }

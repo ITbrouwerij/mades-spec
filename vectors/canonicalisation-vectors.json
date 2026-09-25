@@ -88,6 +88,18 @@
       "input": "   \n\t\n",
       "canonical": "",
       "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "BOM, CRLF and lone CR in one input, without a final newline",
+      "input": "﻿a\r\nb\rc",
+      "canonical": "a\nb\nc\n",
+      "digest": "sha256:880553fca8fcea94e325ee2cfb48e5a985cc797f39a14cc6d3cedecfeb2ae4d2"
+    },
+    {
+      "name": "trailing whitespace goes, whitespace inside a line stays",
+      "input": "a  b   \nc\t\n",
+      "canonical": "a  b\nc\n",
+      "digest": "sha256:7bfd9cd48a4eefc2d0a16a19a11c93603cc76232238be786b74142673753c9f4"
     }
   ]
 }

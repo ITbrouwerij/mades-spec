@@ -1,0 +1,425 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ITbrouwerij/mades-spec/main/vectors/mades-vectors-1.schema.json",
+  "spec": "MAdES — locating, parsing and rebuilding blocks (§a.1, §a.3, §a.5, §a.12, §a.13)",
+  "specVersion": "1.10",
+  "signingInputEncoding": "utf8",
+  "generatedFrom": "the reference implementation, over the cases of reference/test/mades.test.mjs as of v1.10",
+  "note": "Each case is a whole document and the expected reading of every block in it. The documents are small and mostly unsigned on purpose: each isolates one rule, and what these cases pin is where a block is, what it says and what it signs, not whether a key produced it. Until v1.10.1 they existed only as reference tests, where no second implementation could run them. The shape is described in vectors/README.md.",
+  "rules": [
+    "The opening marker counts only at the start of a line, and never inside a fenced code block (§a.1).",
+    "Every line in a block is a comment, a blank or a well-formed field. From block version 4 anything else makes the block unsupported (§a.1, §a.5).",
+    "The signing input is the canonical content, a line feed, the comment lines in document order and the fields sorted by key, without signature and timestamp (§a.3).",
+    "Signature blocks and archive layers are one sequence. A layer covers the §a.2 canonicalisation of everything before its own opening marker (§a.13)."
+  ],
+  "cases": [
+    {
+      "name": "a marker inside a sentence is not a block",
+      "section": "§a.1",
+      "note": "The marker counts only at the start of a line.",
+      "document": "A block opens with <!-- mades-sig and closes with -->.\n",
+      "expect": {
+        "blocks": []
+      }
+    },
+    {
+      "name": "a complete block inside a fenced example is not a block",
+      "section": "§a.1",
+      "note": "The case the rule was written for: a document that quotes a block is not signed by it.",
+      "document": "# How to read a block\n\n```\n<!-- mades-sig\nversion: 5\nsigner: alice@example.com\n-->\n```\n",
+      "expect": {
+        "blocks": []
+      }
+    },
+    {
+      "name": "an indented marker is not a block",
+      "section": "§a.1",
+      "note": "Column zero, no indentation. Four spaces make an indented code block, which renders as code.",
+      "document": "text\n\n    <!-- mades-sig\n    version: 5\n    -->\n",
+      "expect": {
+        "blocks": []
+      }
+    },
+    {
+      "name": "the real block in a document that also demonstrates one",
+      "section": "§a.1",
+      "note": "A fenced example and an inline mention before the real block. Exactly one block is found, and it is the last one: its fields say so.",
+      "document": "Written like this:\n\n```md\n<!-- mades-sig\nversion: 5\n-->\n```\n\nand inline as <!-- mades-sig too.\n\n<!-- mades-sig\nversion: 5\nsigner: alice@example.com\nsignature: AAAA\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "signer": "alice@example.com",
+              "signature": "AAAA"
+            },
+            "comments": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "a fence indented by up to three spaces is still a fence",
+      "section": "§a.1",
+      "note": "CommonMark allows three spaces before a fence. A scanner that misses it finds a phantom block at column zero inside it.",
+      "document": "text\n\n  ```\n<!-- mades-sig\nversion: 5\n-->\n  ```\n",
+      "expect": {
+        "blocks": []
+      }
+    },
+    {
+      "name": "a fence closes only on the same character, at least as many",
+      "section": "§a.1",
+      "note": "A ``` line inside a ~~~~ fence does not close it.",
+      "document": "~~~~\n```\n<!-- mades-sig\nversion: 5\n-->\n```\n~~~~\n",
+      "expect": {
+        "blocks": []
+      }
+    },
+    {
+      "name": "a block at the very start of the document",
+      "section": "§a.1",
+      "note": "The first line is a line start. The text after the block is irrelevant here; under §a.14 this document is not conforming, which is not what this case is about.",
+      "document": "<!-- mades-sig\nversion: 5\nsignature: AAAA\n-->\n\nafter\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "signature": "AAAA"
+            },
+            "comments": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "an unterminated marker is not a block",
+      "section": "§a.1",
+      "note": "No closing -->, no block. The safe direction: unsigned content never reads as signed.",
+      "document": "text\n\n<!-- mades-sig\nversion: 5\n",
+      "expect": {
+        "blocks": []
+      }
+    },
+    {
+      "name": "flat fields, a map and a list",
+      "section": "§a.1",
+      "note": "The three shapes a field can take. Map sub-keys and list items keep their values as strings.",
+      "document": "x\n\n<!-- mades-sig\nversion: 5\nappearance:\n  mode: signature\n  digest: sha256:abc\ncertificate-chain:\n  - MIIB\n  - MIIC\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "appearance": {
+                "mode": "signature",
+                "digest": "sha256:abc"
+              },
+              "certificate-chain": [
+                "MIIB",
+                "MIIC"
+              ]
+            },
+            "comments": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "a well-formed map and list, nothing left over",
+      "section": "§a.1",
+      "note": "The counterpart of the two cases below: containers that are well formed produce no unparsed lines.",
+      "document": "x\n\n<!-- mades-sig\nappearance:\n  mode: signature\ncertificate-chain:\n  - MIIB\n  - MIIC\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "appearance": {
+                "mode": "signature"
+              },
+              "certificate-chain": [
+                "MIIB",
+                "MIIC"
+              ]
+            },
+            "comments": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "a line that is not a field is counted, not dropped",
+      "section": "§a.5",
+      "note": "The rule of block version 4: a line that is neither a comment, a blank nor a field makes the block unsupported.",
+      "document": "x\n\n<!-- mades-sig\nversion: 5\nthis is not a field\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "an indented key after a list item is counted",
+      "section": "§a.5",
+      "note": "What a list of maps looks like. The syntax has lists of strings and maps of strings, nothing nested, so both indented keys are lines the reader cannot place. Before spec v1.5 the reference dropped them silently and gave a verdict over a block it had only partly read.",
+      "document": "x\n\n<!-- mades-sig\nversion: 5\ncovers:\n  - name: annex.pdf\n    media-type: application/pdf\n    digest: sha256:9f2c\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "a list item after a map key is counted",
+      "section": "§a.5",
+      "note": "The mirror case: a list item under a key that already opened a map.",
+      "document": "x\n\n<!-- mades-sig\nversion: 5\nappearance:\n  mode: signature\n  - stray\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "a reverse-DNS vendor field name is a field",
+      "section": "§a.1",
+      "note": "The dots are part of the name. A pattern without them makes every vendor field an unparsed line.",
+      "document": "x\n\n<!-- mades-sig\nversion: 5\nbuild.vecto.void: true\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "build.vecto.void": "true"
+            },
+            "comments": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "every comment line is signed, from block version 4",
+      "section": "§a.3",
+      "note": "Both comment lines, in document order, before the sorted fields.",
+      "document": "content\n\n<!-- mades-sig\n# first\n# second\nversion: 5\nsigner: a@b.example\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "signer": "a@b.example"
+            },
+            "comments": [
+              "# first",
+              "# second"
+            ],
+            "signingInput": "content\n\n# first\n# second\nsigner: a@b.example\nversion: 5"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a version 3 block is read under version 3 rules",
+      "section": "§a.3",
+      "note": "Version 3 signed only the first comment line. The block version decides, not the reader, so signatures made then keep verifying. A verifier SHOULD also warn that the second line is outside the signature (§a.5).",
+      "document": "content\n\n<!-- mades-sig\n# first\n# second\nversion: 3\nsigner: a@b.example\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "3",
+              "signer": "a@b.example"
+            },
+            "comments": [
+              "# first",
+              "# second"
+            ],
+            "signingInput": "content\n\n# first\nsigner: a@b.example\nversion: 3"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an unknown vendor field is signed like any other",
+      "section": "§a.3",
+      "note": "What is signed is what is written; there is no list of known fields in the signing input.",
+      "document": "content\n\n<!-- mades-sig\n# c\nversion: 5\nbuild.acme.run: 4821\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "build.acme.run": "4821"
+            },
+            "comments": [
+              "# c"
+            ],
+            "signingInput": "content\n\n# c\nbuild.acme.run: 4821\nversion: 5"
+          }
+        ]
+      }
+    },
+    {
+      "name": "covers: entries in the order written, inside the signing input",
+      "section": "§a.12",
+      "note": "Order is kept, never sorted. Each entry is digest, media type, and the rest of the line as the name, so a name may contain spaces. The list is in the signing input, so a changed digest is a changed signature.",
+      "document": "Agreement, with annexes.\n\n<!-- mades-sig\nversion: 5\nalgorithm: ed25519\nsigner: alice@example.com\nsigned-at: 2026-08-19T09:00:00Z\ncovers:\n  - sha256:9f2c1d40 application/pdf annex-b-pricing.pdf\n  - sha256:41ab77e2 image/png floor plan, ground level.png\nsignature: 00\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "algorithm": "ed25519",
+              "signer": "alice@example.com",
+              "signed-at": "2026-08-19T09:00:00Z",
+              "covers": [
+                "sha256:9f2c1d40 application/pdf annex-b-pricing.pdf",
+                "sha256:41ab77e2 image/png floor plan, ground level.png"
+              ],
+              "signature": "00"
+            },
+            "comments": [],
+            "signingInput": "Agreement, with annexes.\n\nalgorithm: ed25519\ncovers:\n  - sha256:9f2c1d40 application/pdf annex-b-pricing.pdf\n  - sha256:41ab77e2 image/png floor plan, ground level.png\nsigned-at: 2026-08-19T09:00:00Z\nsigner: alice@example.com\nversion: 5",
+            "coversEntries": [
+              {
+                "digest": "sha256:9f2c1d40",
+                "mediaType": "application/pdf",
+                "name": "annex-b-pricing.pdf"
+              },
+              {
+                "digest": "sha256:41ab77e2",
+                "mediaType": "image/png",
+                "name": "floor plan, ground level.png"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "an archive layer is a block of its own kind, after the signature it covers",
+      "section": "§a.13",
+      "note": "One sequence for both kinds. The layer takes the same §a.2 canonicalisation a signature takes, up to its own opening marker, so it covers the signature block above it and not itself.",
+      "document": "The agreement.\n\n<!-- mades-sig\nversion: 5\nalgorithm: ed25519\nsigner: alice@example.com\nsignature: aa\n-->\n\n<!-- mades-archive-ts\n# ⧗ Archive timestamp — 2026-08-19T09:12:04Z — covers everything above\nversion: 5\ntimestamp: MIAGCSqGSIb3\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "algorithm": "ed25519",
+              "signer": "alice@example.com",
+              "signature": "aa"
+            },
+            "comments": [],
+            "signingInput": "The agreement.\n\nalgorithm: ed25519\nsigner: alice@example.com\nversion: 5"
+          },
+          {
+            "kind": "archive-ts",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "timestamp": "MIAGCSqGSIb3"
+            },
+            "comments": [
+              "# ⧗ Archive timestamp — 2026-08-19T09:12:04Z — covers everything above"
+            ],
+            "canonicalContent": "The agreement.\n\n<!-- mades-sig\nversion: 5\nalgorithm: ed25519\nsigner: alice@example.com\nsignature: aa\n-->\n"
+          }
+        ]
+      }
+    },
+    {
+      "name": "the same signature without the layer signs the same input",
+      "section": "§a.13",
+      "note": "Compare with the previous case: placing a layer after a signature does not change what the signature signed. If it did, every renewal would break the signatures it exists to preserve.",
+      "document": "The agreement.\n\n<!-- mades-sig\nversion: 5\nalgorithm: ed25519\nsigner: alice@example.com\nsignature: aa\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "algorithm": "ed25519",
+              "signer": "alice@example.com",
+              "signature": "aa"
+            },
+            "comments": [],
+            "signingInput": "The agreement.\n\nalgorithm: ed25519\nsigner: alice@example.com\nversion: 5"
+          }
+        ]
+      }
+    },
+    {
+      "name": "a second layer covers the first",
+      "section": "§a.13",
+      "note": "Renewal is an ordinary append. The outer layer's input contains the inner layer, token included.",
+      "document": "The agreement.\n\n<!-- mades-sig\nversion: 5\nalgorithm: ed25519\nsigner: alice@example.com\nsignature: aa\n-->\n\n<!-- mades-archive-ts\n# ⧗ Archive timestamp — 2026-08-19T09:12:04Z — covers everything above\nversion: 5\ntimestamp: MIAGCSqGSIb3\n-->\n<!-- mades-archive-ts\nversion: 5\ntimestamp: MIAB\n-->\n",
+      "expect": {
+        "blocks": [
+          {
+            "kind": "sig",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "algorithm": "ed25519",
+              "signer": "alice@example.com",
+              "signature": "aa"
+            },
+            "comments": []
+          },
+          {
+            "kind": "archive-ts",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "timestamp": "MIAGCSqGSIb3"
+            },
+            "comments": [
+              "# ⧗ Archive timestamp — 2026-08-19T09:12:04Z — covers everything above"
+            ]
+          },
+          {
+            "kind": "archive-ts",
+            "unparsedLines": 0,
+            "fields": {
+              "version": "5",
+              "timestamp": "MIAB"
+            },
+            "comments": [],
+            "canonicalContent": "The agreement.\n\n<!-- mades-sig\nversion: 5\nalgorithm: ed25519\nsigner: alice@example.com\nsignature: aa\n-->\n\n<!-- mades-archive-ts\n# ⧗ Archive timestamp — 2026-08-19T09:12:04Z — covers everything above\nversion: 5\ntimestamp: MIAGCSqGSIb3\n-->\n"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-> **Status:** Specification · **Version:** 1.10 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
+> **Status:** Specification · **Version:** 1.10.1 (stable — see §0.2) · **Block `version: 5`** · **Reference implementation:** included, `reference/`
 >
 > **This is an open specification. It is not the documentation of any one
 > product.** MAdES is authored and published by Jan Smets (ITbrouwerij) so that
@@ -1502,25 +1502,40 @@ implementation that stores only the digest produces genuine signatures nobody
 can verify.
 
 **Interoperability vectors (published, `vectors/`).** The statements below are
-backed by files in this repository, and `reference/test/vectors.test.mjs` reads
-every one of them on every run — a vector the reference implementation cannot
-itself pass proves nothing. Until v1.8 this section *described* vectors that
-lived in one vendor's product tree, where no second implementer could find
-them; a specification that points at evidence its own publication does not
-carry is asserting, not showing.
+backed by files in this repository, and `reference/test/` reads every one of
+them on every run — a vector the reference implementation cannot itself pass
+proves nothing. Until v1.8 this section *described* vectors that lived in one
+vendor's product tree, where no second implementer could find them; a
+specification that points at evidence its own publication does not carry is
+asserting, not showing.
 
-- **`canonicalisation-vectors.json`** — §a.2 over thirteen inputs: BOM, CRLF,
+- **`canonicalisation-vectors.json`** — §a.2 over fifteen inputs: BOM, CRLF,
   lone CR, trailing whitespace, missing and multiple trailing newlines, leading
-  blank lines, leading whitespace, interior blank lines, multi-byte content and
-  empty content. Input, expected canonical form, expected digest. This is where
-  two implementations silently diverge, and the failure has no diagnostic.
+  blank lines, leading whitespace, interior blank lines, multi-byte content,
+  empty content, the first three rules in one input, and whitespace inside a
+  line, which stays. Input, expected canonical form, expected digest. This is
+  where two implementations silently diverge, and the failure has no
+  diagnostic.
 - **`boundary-vectors.json`** — §a.14 in both directions: four conforming
-  endings and eight non-conforming tails, including the appended clause the
-  section exists for and the §a.13 interplay case above. These exist because
-  three implementations read v1.6 identically and identically wrongly:
-  agreement between implementations was no evidence, since it came from the
-  same sentence. Implementations SHOULD compare against this file rather than
-  against their own reading of the text.
+  endings, seven non-conforming tails including the appended clause the section
+  exists for, the §a.13 interplay case above, and a document without blocks,
+  which has no boundary to report. These exist because three implementations
+  read v1.6 identically and identically wrongly: agreement between
+  implementations was no evidence, since it came from the same sentence.
+  Implementations SHOULD compare against this file rather than against their
+  own reading of the text.
+- **`block-vectors.json`** *(v1.10.1)* — twenty documents with the expected
+  reading of every block in them: where a block may be found (§a.1), the field
+  syntax and total parsing (§a.1, §a.5), what the signing input contains
+  (§a.3, including a version 3 block read under version 3 rules), `covers`
+  (§a.12), and the input of an archive layer (§a.13). Mostly unsigned: what
+  they pin is where a block is, what it says and what it signs.
+- **`certificate-policy-vectors.json`** *(v1.10.1)* — §a.11.2 and §a.11.3 from
+  the certificate's side, over real DER: a constrained machine credential, an
+  ordinary certificate whose policy OIDs are all of other kinds and must come
+  out unconstrained, and bytes that are not a certificate. Per certificate the
+  policy OIDs, the category, the permitted set, and the outcome for each
+  commitment tried against it.
 - **`mades-v4-vectors.json`** — four signed documents with signing input,
   digest and signature, plus the throwaway key that signed them:
   minimal, a vendor field, a counter-signature, and a `timestamp` field shown
@@ -1535,11 +1550,17 @@ carry is asserting, not showing.
   (the second covering the first), a layer over three signatures, a layer over
   a `covers` list, and a damaged layer where the layer breaks and the
   signature beneath it does not.
+- **`mades-examples-vectors.json`** *(v1.10.1)* — the three signed documents in
+  `examples/`, embedded byte for byte, with the digest of each signing input
+  and the verdict of the signature over it; and two variants: one character
+  changed, where the signature fails, and a clause appended after the block,
+  where the signature holds and the document is `invalid` by §a.14 alone.
 
 **Every file declares its own shape** *(v1.8.1)*. `$schema` names
 `mades-vectors-1.schema.json`, published beside them here, and a file carrying
 `signingInput` MUST declare `signingInputEncoding` — `base64` or `utf8`. Both
-values occur, and that is not tidied away below.
+values occur, and that is not tidied away below. What a case holds beyond the
+envelope is described per file in `vectors/README.md`.
 
 > **What this corrects.** The v4 file records its signing input as base64 and
 > the v5 file records it raw, and nothing in either file said so: the encoding
@@ -1575,13 +1596,14 @@ naming them here. Tracked under Open decisions.
 > would be poor form to leave a second one unmarked.
 >
 > *(v1.9)* The **reading** side of §a.11.2 and §a.11.3 is covered without them:
-> `reference/test/certpolicy.test.mjs` runs against recorded certificates that
-> really carry these OIDs, including one that carries policy OIDs of other
-> kinds and must therefore come out unconstrained. What is missing is a signed
-> *document* vector, and the gap has a cause worth naming: `mades-sign` signs
-> with a raw key by design (§c.3 — issuing certificates needs a CA, an identity
-> check and a confirmation channel), so this repository cannot produce one
-> without becoming something it deliberately is not.
+> `certificate-policy-vectors.json` (a reference test until v1.10.1) holds
+> recorded certificates that really carry these OIDs, including one that
+> carries policy OIDs of other kinds and must therefore come out unconstrained.
+> What is missing is a signed *document* vector, and the gap has a cause worth
+> naming: `mades-sign` signs with a raw key by design (§c.3 — issuing
+> certificates needs a CA, an identity check and a confirmation channel), so
+> this repository cannot produce one without becoming something it deliberately
+> is not.
 
 ## f. Integration in existing flows
 

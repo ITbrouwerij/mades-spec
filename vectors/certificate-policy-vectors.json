@@ -1,0 +1,123 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ITbrouwerij/mades-spec/main/vectors/mades-vectors-1.schema.json",
+  "spec": "MAdES — what the signing certificate asserts: the signer category (§a.11.2) and commitment constraints (§a.11.3)",
+  "specVersion": "1.9",
+  "generatedFrom": "two certificates made with OpenSSL, self-signed with throwaway keys; recorded in reference/test/certpolicy.test.mjs from v1.9 until v1.10.1",
+  "note": "Real DER certificates, because the risk in §a.11.3 is how ordinary certificates behave: they carry policy OIDs for reasons of their own, and a reader that takes those for constraints rejects every signature ever made. Nothing here trusts these certificates. Only their certificatePolicies extension is read; chain, validity and signature are out of scope. The expectations assume the reference assignments in `mapping`. A deployment with OIDs of its own gives its verifier its own mapping (§a.11.2, §a.11.3).",
+  "mapping": {
+    "category": {
+      "1.3.6.1.4.1.65498.2.1.1": "human",
+      "1.3.6.1.4.1.65498.2.1.2": "automated"
+    },
+    "commitment": {
+      "1.3.6.1.4.1.65498.2.2.1": "creation",
+      "1.3.6.1.4.1.65498.2.2.2": "approval",
+      "1.3.6.1.4.1.65498.2.2.3": "receipt",
+      "1.3.6.1.4.1.65498.2.2.4": "witness"
+    }
+  },
+  "rules": [
+    "Read certificatePolicies from the signing certificate itself, not from the issuer and not from the validated policy set of the path (§a.11.3 rule 1).",
+    "A certificate that asserts no category leaves the category asserted but not anchored: not invalid, and never human (§a.11.2).",
+    "Only OIDs in the mapping are constraints. A certificate asserting none of them is unconstrained, which is not the same as permitting nothing (§a.11.3 rule 2).",
+    "A certificate asserting one or more constraint OIDs permits exactly those commitments (§a.11.3 rule 3).",
+    "The commitment compared is the effective one: approval when the block has no commitment field (§a.11.3 rule 4, §a.4).",
+    "An unrecognised commitment exceeds any constraint; under an unconstrained certificate it stays an unrecognised commitment (§a.11.3 rule 5, §a.4).",
+    "A commitment that exceeds the constraint makes the signature invalid, and the report names the commitment and the permitted set (§a.5 step 9, §a.11.3 rule 6)."
+  ],
+  "cases": [
+    {
+      "name": "a constrained machine credential",
+      "note": "Three policy OIDs: an assurance level under the same PEN that is neither a category nor a constraint, the category automated, and the single constraint creation. The absent commitment is the trap rule 4 closes: omitting the field claims approval, and this certificate does not permit it.",
+      "certificate": "MIIBmDCCAT2gAwIBAgIUTFvidqZ1CDAtO6rNARgiFDdL25IwCgYIKoZIzj0EAwIwIDEeMBwGA1UEAwwVVmVyc2lvbiBMb2NrZXIgKHRlc3QpMB4XDTI2MDgyMjEzMDU1OFoXDTM2MDgxOTEzMDU1OFowIDEeMBwGA1UEAwwVVmVyc2lvbiBMb2NrZXIgKHRlc3QpMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEjRINsniqAKOxLceLGIOo8mKMM9JiVWyyEbchjKxNtuOY4tYfwmEqnMuZSEHyZfHINMNuu4jyhfckt1yI3Fg6VKNVMFMwCQYDVR0TBAIwADAOBgNVHQ8BAf8EBAMCBsAwNgYDVR0gBC8wLTANBgsrBgEEAYP/WgEBATANBgsrBgEEAYP/WgIBAjANBgsrBgEEAYP/WgICATAKBggqhkjOPQQDAgNJADBGAiEAgIJDzaOJ2NamY9S7Rdc79P73iRs0mui9VQauAx6+GjYCIQDxDv354ErcHqpurqtuVxh8GUf5gwhxzUAXbXXoiXHzKA==",
+      "expect": {
+        "policyOids": [
+          "1.3.6.1.4.1.65498.1.1.1",
+          "1.3.6.1.4.1.65498.2.1.2",
+          "1.3.6.1.4.1.65498.2.2.1"
+        ],
+        "category": "automated",
+        "permittedCommitments": [
+          "creation"
+        ],
+        "checks": [
+          {
+            "commitment": "creation",
+            "effective": "creation",
+            "constraint": "permitted"
+          },
+          {
+            "commitment": "approval",
+            "effective": "approval",
+            "constraint": "exceeded"
+          },
+          {
+            "commitment": "receipt",
+            "effective": "receipt",
+            "constraint": "exceeded"
+          },
+          {
+            "commitment": "frobnicate",
+            "effective": "frobnicate",
+            "constraint": "exceeded"
+          },
+          {
+            "commitment": null,
+            "effective": "approval",
+            "constraint": "exceeded"
+          }
+        ]
+      }
+    },
+    {
+      "name": "an ordinary certificate whose policies are none of these",
+      "note": "The CA/Browser Forum domain-validated OID and an assurance level. It carries policies and none of them is a category or a constraint, so it asserts no category and is unconstrained. Read as constrained to the empty set, it would reject every commitment.",
+      "certificate": "MIIBhTCCASugAwIBAgIUSFJSe4ph3KMpnLHEdgaxSacfMPswCgYIKoZIzj0EAwIwITEfMB0GA1UEAwwWT3JkaW5hcnkgU2lnbmVyICh0ZXN0KTAeFw0yNjA4MjIxMzA1NThaFw0zNjA4MTkxMzA1NThaMCExHzAdBgNVBAMMFk9yZGluYXJ5IFNpZ25lciAodGVzdCkwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQJtAUlQ1mQz4ps86mivfTNqFTPKzKTK4P0OgP4uOnzd1pevsT7mPqyBA689CB++2jH6z1RIy/UTMCbX6p8YS/lo0EwPzAJBgNVHRMEAjAAMA4GA1UdDwEB/wQEAwIGwDAiBgNVHSAEGzAZMAgGBmeBDAECATANBgsrBgEEAYP/WgEBATAKBggqhkjOPQQDAgNIADBFAiBIEl+HX4V10XTgGHjMN1vERbxglxnxRWiahfsFWDMuLgIhAIcpkfz9f0pAABZB5nGSVf8YWZDJBzUCUE1iMULUwIVV",
+      "expect": {
+        "policyOids": [
+          "2.23.140.1.2.1",
+          "1.3.6.1.4.1.65498.1.1.1"
+        ],
+        "category": null,
+        "permittedCommitments": null,
+        "checks": [
+          {
+            "commitment": "creation",
+            "effective": "creation",
+            "constraint": "unconstrained"
+          },
+          {
+            "commitment": "approval",
+            "effective": "approval",
+            "constraint": "unconstrained"
+          },
+          {
+            "commitment": "receipt",
+            "effective": "receipt",
+            "constraint": "unconstrained"
+          },
+          {
+            "commitment": "witness",
+            "effective": "witness",
+            "constraint": "unconstrained"
+          },
+          {
+            "commitment": "frobnicate",
+            "effective": "frobnicate",
+            "constraint": "unconstrained"
+          }
+        ]
+      }
+    },
+    {
+      "name": "bytes that do not parse as a certificate",
+      "note": "Three bytes of truncated DER. A reader that cannot read the certificate finds no category, so never human, and no constraint, so it does not reject a signature for its own limitation (§a.11, §a.5). What the signature itself comes to with such a certificate is a separate question and not pinned here.",
+      "certificate": "MIAB",
+      "expect": {
+        "policyOids": [],
+        "category": null,
+        "permittedCommitments": null
+      }
+    }
+  ]
+}

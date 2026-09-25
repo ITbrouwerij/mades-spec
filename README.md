@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml/badge.svg)](https://github.com/ITbrouwerij/mades-spec/actions/workflows/test.yml)
 
-> **Specification v1.9 (stable, §0.2)** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
+> **Specification v1.10.1 (stable, §0.2)** · **Block `version: 5`** · **License:** [CC-BY-4.0](LICENSE-SPEC) (spec) / [MIT](LICENSE-CODE) (reference code)
 >
 > An open specification for signing Markdown. Not the documentation of any one
 > product — a conforming implementation must be able to succeed knowing nothing
@@ -220,14 +220,17 @@ green — the reader came there for certainty and leaves with the wrong one.
 ## Interoperability vectors
 
 `vectors/` carries the published answer files: canonicalisation (§a.2), the
-document boundary (§a.14), signed v4 and v5 documents, and archive layers
-(§a.13). An implementation compares against these files instead of against its
-own reading of the text — three implementations once read one sentence
+document boundary (§a.14), locating, parsing and rebuilding blocks (§a.1, §a.3,
+§a.5, §a.12, §a.13), what a signing certificate asserts (§a.11.2, §a.11.3),
+signed v4 and v5 documents, archive layers (§a.13), and the signed documents in
+`examples/`. An implementation compares against these files instead of against
+its own reading of the text — three implementations once read one sentence
 identically and identically wrongly, which is why a shared answer file exists.
 `reference/test/` re-verifies every vector on every run. Each file names its
 shape in `mades-vectors-1.schema.json` and, where it carries a signing input,
 says whether that input is `base64` or `utf8` — do not infer it from the file
-you opened first.
+you opened first. [`vectors/README.md`](vectors/README.md) describes what each
+file's cases hold.
 
 ## Status
 

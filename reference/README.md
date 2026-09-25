@@ -7,7 +7,7 @@ built-ins only. Node 20+.
 mades-canon.mjs    block location, parsing, canonicalisation, signing input
 mades-verify.mjs   verify a document using nothing but the document
 mades-sign.mjs     append a signature, signing with a local key
-test/              34 tests, including three against real signed documents
+test/              every file in ../vectors/, and what a vector cannot carry
 ```
 
 ## Verify
@@ -94,8 +94,11 @@ say something more flattering is the exact thing this format exists to prevent.
 npm test
 ```
 
-34 tests. The first suite verifies the real signed document, checks that a single
-changed character breaks it, and asserts the file still has LF endings — that
-last one is a `.gitattributes` test in disguise, and the reason CI runs on
-Windows. Without `-text` on that file, git rewrites it on checkout there and the
-signature fails for everyone who cloned the repository.
+Runs this implementation over every file in `../vectors/` — including the
+three real signed documents in `../examples/`, one of them with a character
+changed — and then the tests a vector file cannot carry: the writer, round
+trips with a fresh key, and the files themselves. One of those asserts that the
+examples still have LF endings. It is a `.gitattributes` test in disguise, and
+the reason CI runs on Windows: without `-text` on those files, git rewrites
+them on checkout there and the signatures fail for everyone who cloned the
+repository.
