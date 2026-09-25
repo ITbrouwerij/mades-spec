@@ -27,7 +27,7 @@ stay here as the norm it is held to.
 - `mades-verify` and `mades-sign` stay, with the same invocation, as command
   lines around the package. Every judgement is the package's.
 - `reference/test/` runs every vector file through the package, at the version
-  `package.json` allows (`^1.5.2`). That includes what the former reference
+  `package.json` allows (`^1.5.3`). That includes what the former reference
   left to "a full implementation": the per-layer verdicts of the archive
   vectors, against their RFC 3161 tokens. The tests that are not vectors — the
   writer, round trips, the example files — run against the package too, and
@@ -42,21 +42,26 @@ stay here as the norm it is held to.
   against their tokens, where it used to state them, and checks the appearance
   against its digest (§a.8).
 - `mades-sign` writes the content above the block in its canonical form (§a.2).
-- `mades-sign` writes a comment line without the category:
-  `# ✓ Signed by alice@example.com — approval — 2026-08-14`. §d says it SHOULD
-  name it (v5), and the former writer did. This is a gap in the implementation,
-  not a change to the rule.
+- `mades-sign` names the category in the comment line of a v5 block, as §d
+  says it SHOULD and the former writer did:
+  `# ✓ Signed by alice@example.com — approval — human — 2026-08-14`.
 
-**What went with the former reference**, because the package does otherwise and
-no vector pinned it:
+**Where the package first did otherwise, and now does not.** Moving the
+command lines onto the package showed three places where it differed from the
+former reference and no vector pinned it. `@itbrouwerij/mades-verify` 1.5.3
+closes them, and this release requires it:
 
-- A signed field whose name carries no namespace. §a.1 makes it `unsupported`;
-  the former verifier reported a failure, and the package lists it among the
-  fields it does not implement (§d level 4) without lowering the verdict.
-  Neither does what §a.1 says. A gap in the implementation.
-- A certificate asserting both categories. The former verifier reported a
-  failure; the package reads it as asserting none. The text does not decide
-  between them, so the question is now under Open decisions.
+- A signed field whose name carries no namespace makes the block
+  `unsupported`, as §a.1 says. The package had listed it among the fields it
+  does not implement (§d level 4) without lowering the verdict.
+- A certificate asserting both categories makes the signature `invalid`, as
+  the former verifier reported. The text still does not decide it, so the
+  question stays under Open decisions.
+- The comment line of a v5 block names the category again (§d, above).
+
+The same release of the package also stopped a verdict of the signature from
+overwriting an `unsupported` set while reading the block: an unreadable
+`covers` line beside a certificate read as `valid`.
 
 Editorial: §a.11.4 no longer claims the reference writes "prepared by". Neither
 the former reference nor the package does.

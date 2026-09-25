@@ -11,7 +11,7 @@
     "test": "node --test reference/test/mades.test.mjs reference/test/vectors.test.mjs reference/test/certpolicy.test.mjs reference/test/cli.test.mjs"
   },
   "dependencies": {
-    "@itbrouwerij/mades-verify": "^1.5.2"
+    "@itbrouwerij/mades-verify": "^1.5.3"
   },
   "keywords": [
     "markdown",

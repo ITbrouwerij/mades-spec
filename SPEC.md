@@ -1802,9 +1802,9 @@ each item is additive, and each says what unblocks it.
   a throwaway CA that carries category assertions (§a.11.2). Publishing them
   half-made would be worse than naming them here.
 - **A certificate asserting both categories** (§a.11.2) — the text does not say.
-  The implementation reads it as asserting none, so *asserted but not
-  anchored*; the reference before v1.11 reported a failure. Unblocked by a
-  decision and a certificate to pin it in `certificate-policy-vectors.json`.
+  The implementation (1.5.3) reports it `invalid`, as the reference before
+  v1.11 did. Unblocked by a decision and a certificate to pin it in
+  `certificate-policy-vectors.json`.
 - **`automation` vocabulary** (§a.11.1) — three values registered; deliberately
   open. The question is not *which values* but whether a lightweight registry
   becomes necessary once more than one deployment coins terms.
